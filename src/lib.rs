@@ -5,6 +5,9 @@ use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash};
 use std::io::{Read, Write};
+use arraydeque::ArrayDeque;
+
+const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 
 fn write_var_u32(num: u32, buffer: &mut dyn Write) -> u8 {
     let mut number = num.clone();
@@ -275,7 +278,7 @@ impl<'a> ChunkWriter<'a> {
             mask: 0,
             // FIXME add this!
             offset_of_chunk_header: 0,
-            statistics: Box::new(self.statistics.clone()),
+            statistics: self.statistics.clone(),
         }
     }
 }
@@ -465,12 +468,14 @@ impl Statistics for LongStatistics {
     }
 }
 
+#[derive(Copy, Clone)]
 struct ChunkMetadata<'a> {
     measurement_id: &'a str,
     data_type: TSDataType,
     mask: u8,
     offset_of_chunk_header: i64,
-    statistics: Box<dyn Statistics>,
+    // statistics: Box<dyn Statistics>,
+    statistics: StatisticsStruct<i32>,
 }
 
 impl Display for ChunkMetadata<'_> {
@@ -510,6 +515,91 @@ impl ChunkGroupMetadata<'_> {
     }
 }
 
+
+#[derive(Clone)]
+enum MetadataIndexNodeType {
+    LEAF_MEASUREMENT
+}
+
+struct TimeseriesMetadata {
+
+}
+
+#[derive(Clone)]
+struct MetadataIndexEntry {
+    name: String,
+    offset: usize,
+}
+
+#[derive(Clone)]
+struct MetadataIndexNode {
+    children: Vec<MetadataIndexEntry>,
+    end_offset: usize,
+    node_type: MetadataIndexNodeType
+}
+
+impl MetadataIndexNode {
+    fn new(node_type: MetadataIndexNodeType) -> MetadataIndexNode {
+        MetadataIndexNode {
+            children: vec![],
+            end_offset: 0,
+            node_type
+        }
+    }
+
+    fn add_current_index_node_to_queue(current_index_node: &mut MetadataIndexNode, measurement_metadata_index_queue: &mut Vec<MetadataIndexNode>, file: &mut dyn Write) {
+        // TODO file.getPosition
+        // currentIndexNode.setEndOffset(out.getPosition());
+        current_index_node.end_offset = 0;
+        // metadataIndexNodeQueue.add(currentIndexNode);
+        measurement_metadata_index_queue.push(current_index_node.clone());
+    }
+
+    fn construct_metadata_index(device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>, file: &mut dyn Write) -> MetadataIndexNode {
+        let device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
+
+        for (&device, &list_metadata) in device_timeseries_metadata_map {
+            if list_metadata.is_empty() {
+                continue;
+            }
+
+            let mut measurement_metadata_index_queue: Vec<MetadataIndexNode> = vec![];
+
+            let timeseries_metadata: TimeseriesMetadata;
+            let mut current_index_node: MetadataIndexNode = MetadataIndexNode::new(MetadataIndexNodeType::LEAF_MEASUREMENT);
+
+            // for (int i = 0; i < entry.getValue().size(); i++) {
+            for i in 0..list_metadata.len() {
+                let timeseries_metadata = list_metadata.get(i).unwrap();
+                if (i % GET_MAX_DEGREE_OF_INDEX_NODE == 0) {
+                    if current_index_node.is_full() {
+                        Self::add_current_index_node_to_queue(&mut current_index_node, &mut measurement_metadata_index_queue, file);
+                        current_index_node = MetadataIndexNode::new(MetadataIndexNodeType::LEAF_MEASUREMENT);
+                    }
+                }
+            //   if (currentIndexNode.isFull()) {
+            //     addCurrentIndexNodeToQueue(currentIndexNode, measurementMetadataIndexQueue, out);
+            //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LEAF_MEASUREMENT);
+            //   }
+            //   currentIndexNode.addEntry(
+            //       new MetadataIndexEntry(timeseriesMetadata.getMeasurementId(), out.getPosition()));
+            // }
+            // timeseriesMetadata.serializeTo(out.wrapAsStream());
+            }
+        }
+
+        // TODO remove
+        MetadataIndexNode {
+            children: vec![],
+            end_offset: 0,
+            node_type: MetadataIndexNodeType::LEAF_MEASUREMENT
+        }
+    }
+    fn is_full(&self) -> bool {
+        return self.children.len() >= GET_MAX_DEGREE_OF_INDEX_NODE;
+    }
+}
+
 struct TimeSeriesMetadata {
     time_series_metadata_type: u8,
     chunk_meta_data_list_data_size: usize,
@@ -538,7 +628,7 @@ impl<'a> TsFileWriter<'a> {
         }
     }
 
-    fn flush_metadata_index(&mut self, file: &mut dyn Write, chunk_metadata_list: &HashMap<Path, Vec<&ChunkMetadata>>) {
+    fn flush_metadata_index(&mut self, file: &mut dyn Write, chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>) -> MetadataIndexNode {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
@@ -579,20 +669,11 @@ impl<'a> TsFileWriter<'a> {
             if !self.timeseries_metadata_map.contains_key(device_id) {
                 self.timeseries_metadata_map.insert(device_id.to_owned(), vec![]);
             }
+
+            self.timeseries_metadata_map.get_mut(device_id).unwrap().push(timeseries_metadata);
         }
 
-        //     TimeseriesMetadata timeseriesMetadata =
-        //     new TimeseriesMetadata(
-        //         (byte)
-        //             ((serializeStatistic ? (byte) 1 : (byte) 0) | chunkMetadataList.get(0).getMask()),
-        //         chunkMetadataListLength,
-        //         path.getMeasurement(),
-        //         dataType,
-        //         seriesStatistics,
-        //         publicBAOS);
-        // deviceTimeseriesMetadataMap
-        //     .computeIfAbsent(path.getDevice(), k -> new ArrayList<>())
-        //     .add(timeseriesMetadata);
+        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, file);
     }
 
     pub(crate) fn _flush<'b>(&mut self, file: &'b mut dyn Write) -> Result<(), &str> {
@@ -616,7 +697,7 @@ impl<'a> TsFileWriter<'a> {
         self.chunk_group_metadata = self.group_writers.iter().map(|(_, gw)| gw.get_metadata()).collect();
 
         // Create metadata list
-        let mut chunk_metadata_map: HashMap<Path, Vec<&ChunkMetadata>> = HashMap::new();
+        let mut chunk_metadata_map: HashMap<Path, Vec<ChunkMetadata>> = HashMap::new();
         for group_metadata in &self.chunk_group_metadata {
             for chunk_metadata in &group_metadata.chunk_metadata {
                 let device_path = format!("{}.{}", &group_metadata.device_id, &chunk_metadata.measurement_id);
@@ -626,11 +707,11 @@ impl<'a> TsFileWriter<'a> {
                 if !&chunk_metadata_map.contains_key(&path) {
                     &chunk_metadata_map.insert(path.clone(), vec![]);
                 }
-                &chunk_metadata_map.get_mut(&path).unwrap().push(&chunk_metadata);
+                &chunk_metadata_map.get_mut(&path).unwrap().push(chunk_metadata.clone());
             }
         }
 
-        self.flush_metadata_index(file, &chunk_metadata_map);
+        let metadata_index_node = self.flush_metadata_index(file, &chunk_metadata_map);
 
 
         // TODO Write "real" statistics
