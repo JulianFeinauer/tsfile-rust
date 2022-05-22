@@ -1,93 +1,31 @@
+mod test;
+mod utils;
+mod encoding;
+mod compression;
+mod statistics;
+
 use std::{io, vec};
 use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::hash::{Hash};
+use std::hash::Hash;
 use std::io::{Read, Write};
-use arraydeque::ArrayDeque;
+use compression::CompressionType;
+use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
+use statistics::{Statistics, StatisticsStruct};
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
-
-fn write_var_u32(num: u32, buffer: &mut dyn Write) -> u8 {
-    let mut number = num.clone();
-
-    // Now compress them
-    let mut position: u8 = 1;
-
-    while (number & 0xFFFFFF80) != 0 {
-        buffer.write_all(&[((number & 0x7F) | 0x80) as u8]);
-        number = number >> 7;
-        position = position + 1;
-    }
-
-    buffer.write_all(&[(number & 0x7F) as u8]);
-
-    return position;
-}
-
-fn write_var_i32(num: i32, buffer: &mut dyn Write) -> u8 {
-    let mut uValue = num << 1;
-    if num < 0 {
-        uValue = !uValue;
-    }
-    return write_var_u32(uValue as u32, buffer);
-}
-
-fn read_byte(buffer: &mut dyn Read) -> u8 {
-    let mut read_buffer: [u8; 1] = [0];
-    buffer.read(&mut read_buffer).expect("Prblem");
-    return read_buffer[0];
-}
-
-fn read_var_u32(buffer: &mut dyn Read) -> u32 {
-    let mut value: u32 = 0;
-    let mut i: u8 = 0;
-    let mut b = read_byte(buffer);
-    while b != u8::MAX && (b & 0x80) != 0 {
-        value = value | (((b & 0x7F) as u32) << i);
-        i = i + 7;
-        b = read_byte(buffer);
-    }
-    return value | ((b as u32) << i);
-}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum TSDataType {
     INT32
 }
 
-
 impl TSDataType {
     fn serialize(&self) -> u8 {
         match self {
             TSDataType::INT32 => 1
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-enum TSEncoding {
-    PLAIN
-}
-
-impl TSEncoding {
-    pub(crate) fn serialize(&self) -> u8 {
-        match self {
-            TSEncoding::PLAIN => 0
-        }
-    }
-}
-
-#[derive(PartialEq, Copy, Clone)]
-enum CompressionType {
-    UNCOMPRESSED
-}
-
-impl CompressionType {
-    pub(crate) fn serialize(&self) -> u8 {
-        match self {
-            CompressionType::UNCOMPRESSED => 0
         }
     }
 }
@@ -176,7 +114,7 @@ impl PageWriter {
         // serialize time_encoder and value encoder
         let mut time_buffer = vec![];
         self.time_encoder.serialize(&mut time_buffer);
-        write_var_u32(time_buffer.len() as u32, &mut self.buffer);
+        utils::write_var_u32(time_buffer.len() as u32, &mut self.buffer);
         self.buffer.write_all(time_buffer.as_slice());
         self.value_encoder.serialize(&mut self.buffer);
     }
@@ -239,9 +177,9 @@ impl<'a> ChunkWriter<'a> {
 
         let mut page_buffer: Vec<u8> = vec![];
         // Uncompressed size
-        write_var_u32(uncompressed_bytes as u32, &mut page_buffer);
+        utils::write_var_u32(uncompressed_bytes as u32, &mut page_buffer);
         // Compressed size
-        write_var_u32(compressed_bytes as u32, &mut page_buffer);
+        utils::write_var_u32(compressed_bytes as u32, &mut page_buffer);
         // TODO serialize statistics
         // page data
         match self.current_page_writer.as_mut() {
@@ -257,7 +195,7 @@ impl<'a> ChunkWriter<'a> {
         file.write(&[5]).expect("write failed");   // Marker
         write_str(file, self.measurement_id);
         // Data Lenght
-        write_var_u32(page_buffer.len() as u32, file);
+        utils::write_var_u32(page_buffer.len() as u32, file);
         // Data Type INT32 -> 1
         file.write(&[self.data_type.serialize()]).expect("write failed");
         // Compression Type UNCOMPRESSED -> 0
@@ -322,149 +260,6 @@ impl<'a> GroupWriter<'a> {
                 cw.get_metadata()
             }).collect(),
         }
-    }
-}
-
-trait Statistics: Serializable {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32>;
-}
-
-#[derive(Copy, Clone)]
-struct StatisticsStruct<T> {
-    ts_first: i64,
-    ts_last: i64,
-
-    min_value: T,
-    max_value: T,
-    first_value: T,
-    last_value: T,
-    sum_value: i64,
-}
-
-impl StatisticsStruct<i32> {
-    fn new() -> StatisticsStruct<i32> {
-        StatisticsStruct {
-            ts_first: i64::MAX,
-            ts_last: i64::MIN,
-            min_value: i32::MAX,
-            max_value: i32::MIN,
-            first_value: 0,
-            last_value: 0,
-            sum_value: 0,
-        }
-    }
-
-    pub(crate) fn merge(&mut self, statistics: &StatisticsStruct<i32>) {
-        if statistics.ts_first < self.ts_first {
-            self.ts_first = statistics.ts_first;
-            self.first_value = statistics.first_value;
-        }
-        if statistics.ts_last > self.ts_last {
-            self.ts_last = statistics.ts_first;
-            self.last_value = statistics.last_value;
-        }
-        if statistics.max_value > self.max_value {
-            self.max_value = statistics.max_value;
-        }
-        if statistics.min_value < self.min_value {
-            self.min_value = statistics.min_value;
-        }
-        self.sum_value = self.sum_value + statistics.sum_value;
-    }
-
-    fn update(&mut self, timestamp: i64, value: i32) {
-        if timestamp < self.ts_first {
-            self.ts_first = timestamp;
-            self.first_value = value;
-        }
-        if timestamp > self.ts_last {
-            self.ts_last = timestamp;
-            self.last_value = value;
-        }
-        if value < self.min_value {
-            self.min_value = value;
-        }
-        if value > self.max_value {
-            self.max_value = value;
-        }
-        self.sum_value += value as i64;
-    }
-}
-
-impl Serializable for StatisticsStruct<i32> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
-        file.write_all(&self.min_value.to_be_bytes());
-        file.write_all(&self.max_value.to_be_bytes());
-        file.write_all(&self.first_value.to_be_bytes());
-        file.write_all(&self.last_value.to_be_bytes());
-        file.write_all(&self.sum_value.to_be_bytes())
-    }
-}
-
-impl Statistics for StatisticsStruct<i32> {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32> {
-        self.clone()
-    }
-}
-
-#[derive(Copy, Clone)]
-struct LongStatistics {
-    ts_first: i64,
-    ts_last: i64,
-
-    min_value: i64,
-    max_value: i64,
-    first_value: i64,
-    last_value: i64,
-    sum_value: i64,
-}
-
-impl LongStatistics {
-    fn new() -> LongStatistics {
-        LongStatistics {
-            ts_first: i64::MAX,
-            ts_last: i64::MIN,
-            min_value: i64::MAX,
-            max_value: i64::MIN,
-            first_value: 0,
-            last_value: 0,
-            sum_value: 0,
-        }
-    }
-
-    fn update(&mut self, timestamp: i64, value: i64) {
-        if timestamp < self.ts_first {
-            self.ts_first = timestamp;
-            self.first_value = value;
-        }
-        if timestamp > self.ts_last {
-            self.ts_last = timestamp;
-            self.last_value = value;
-        }
-        if value < self.min_value {
-            self.min_value = value;
-        }
-        if value > self.max_value {
-            self.max_value = value;
-        }
-        self.sum_value += value;
-    }
-}
-
-impl Serializable for LongStatistics {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
-        file.write_all(&self.min_value.to_be_bytes());
-        file.write_all(&self.max_value.to_be_bytes());
-        file.write_all(&self.first_value.to_be_bytes());
-        file.write_all(&self.last_value.to_be_bytes());
-        file.write_all(&self.sum_value.to_be_bytes())
-    }
-}
-
-impl Statistics for LongStatistics {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32> {
-        // this should not work!
-        todo!()
     }
 }
 
@@ -558,7 +353,7 @@ impl MetadataIndexNode {
     fn construct_metadata_index(device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>, file: &mut dyn Write) -> MetadataIndexNode {
         let device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
 
-        for (&device, &list_metadata) in device_timeseries_metadata_map {
+        for (device, list_metadata) in device_timeseries_metadata_map.iter() {
             if list_metadata.is_empty() {
                 continue;
             }
@@ -754,180 +549,6 @@ trait Encoder<DataType> {
     fn encode(&mut self, value: DataType);
 }
 
-struct PlainInt32Encoder {
-    values: Vec<i32>,
-}
-
-impl PlainInt32Encoder {
-    pub(crate) fn serialize(&self, buffer: &mut Vec<u8>) {
-        for val in &self.values {
-            // Do the encoding into writeVarInt
-            write_var_i32(*val, buffer);
-        }
-    }
-}
-
-impl PlainInt32Encoder {
-    fn new() -> PlainInt32Encoder {
-        PlainInt32Encoder {
-            values: vec![]
-        }
-    }
-}
-
-impl Encoder<i32> for PlainInt32Encoder {
-    fn encode(&mut self, value: i32) {
-        self.values.push(value)
-    }
-}
-
-struct TimeEncoder {
-    first_value: Option<i64>,
-    min_delta: i64,
-    previous_value: i64,
-    values: Vec<i64>,
-}
-
-impl TimeEncoder {
-    fn get_value_width(v: i64) -> u32 {
-        return 64 - v.leading_zeros();
-    }
-
-    fn calculate_bit_widths_for_delta_block_buffer(&mut self, delta_block_buffer: &Vec<i64>) -> u32 {
-        let mut width = 0;
-
-        for i in 0..delta_block_buffer.len() {
-            let v = *delta_block_buffer.get(i).expect("");
-            let value_width = Self::get_value_width(v);
-            width = max(width, value_width)
-        }
-
-        return width;
-    }
-
-    fn long_to_bytes(number: i64, result: &mut Vec<u8>, pos: usize, width: u32) {
-        let mut cnt = (pos & 0x07) as u8;
-        let mut index = pos >> 3;
-
-        let mut my_width = width as u8;
-        let mut my_number = number;
-        while my_width > 0 {
-            let m = match my_width + cnt >= 8 {
-                true => { 8 - cnt }
-                false => { my_width }
-            };
-            my_width = my_width - m;
-            let old_count = cnt;
-            cnt = cnt + m;
-            let y = (number >> my_width) as u8;
-            let y = y << (8 - cnt);
-
-            // We need a mask like that
-            // 0...0 (old-cnt-times) 1...1 (8-old-cnt-times)
-            let mut new_mask: u8 = 0;
-            for i in 0..(8 - old_count) {
-                new_mask = new_mask | (1 << i);
-            }
-            new_mask = !new_mask;
-
-            if index <= result.len() {
-                result.resize(index + 1, 0);
-            }
-            let masked_input = result[index] & new_mask;
-            let new_input = masked_input | y;
-            result[index] = new_input;
-            // Remove the written numbers
-            let mut mask: i64 = 0;
-            for i in 0..my_width {
-                mask = mask | (1 << i);
-            }
-            my_number = my_number & mask;
-
-            if cnt == 8 {
-                index = index + 1;
-                cnt = 0;
-            }
-        }
-    }
-
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        // Preliminary calculations
-        let mut delta_block_buffer: Vec<i64> = vec![];
-
-        for delta in &self.values {
-            delta_block_buffer.push(delta - self.min_delta);
-        }
-
-        let write_width = self.calculate_bit_widths_for_delta_block_buffer(&delta_block_buffer);
-
-        // Write Header
-        // Write number of entries
-        let number_of_entries: u32 = self.values.len() as u32;
-        buffer.write_all(&number_of_entries.to_be_bytes());
-        // Write "write-width"
-        buffer.write_all(&write_width.to_be_bytes());
-
-        // Min Delta Base
-        buffer.write_all(&self.min_delta.to_be_bytes());
-        // First Value
-        buffer.write_all(&self.first_value.expect("").to_be_bytes());
-        // End Header
-
-        // FIXME continue here...
-        // now we can drop the long-to-bytes values here
-        let mut payload_buffer = vec![];
-        for i in 0..delta_block_buffer.len() {
-            Self::long_to_bytes(delta_block_buffer[i], &mut payload_buffer, (i * write_width as usize) as usize, write_width);
-        }
-
-        let a = (delta_block_buffer.len() * write_width as usize) as f64;
-        let b = a / 8.0;
-        let encoding_length = b.ceil() as usize;
-
-        // Copy over to "real" buffer
-        buffer.write_all(payload_buffer.as_slice());
-
-
-        // TODO needs to be done right
-        // for val in &self.values {
-        //     buffer.write(&val.to_be_bytes());
-        // }
-    }
-}
-
-impl TimeEncoder {
-    fn new() -> TimeEncoder {
-        TimeEncoder {
-            first_value: None,
-            min_delta: i64::MAX,
-            previous_value: i64::MAX,
-            values: vec![],
-        }
-    }
-}
-
-impl Encoder<i64> for TimeEncoder {
-    fn encode(&mut self, value: i64) {
-        match self.first_value {
-            None => {
-                self.first_value = Some(value);
-                self.previous_value = value;
-            }
-            Some(_) => {
-                // calc delta
-                let delta = value - self.previous_value;
-                // If delta is min, store it
-                if delta < self.min_delta {
-                    self.min_delta = delta;
-                }
-                // store delta
-                self.values.push(delta);
-                self.previous_value = value;
-            }
-        }
-    }
-}
-
 struct Int32Page {
     times: Vec<i64>,
     values: Vec<i32>,
@@ -980,7 +601,7 @@ impl ChunkHeader<'_> {
     }
 }
 
-trait Serializable {
+pub trait Serializable {
     fn serialize(&self, file: &mut dyn Write) -> io::Result<()>;
 }
 
@@ -1120,7 +741,10 @@ fn write_file() {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{CompressionType, MeasurementGroup, MeasurementSchema, Path, read_var_u32, Schema, TimeEncoder, TSDataType, TSEncoding, TsFileWriter, write_file, write_file_2, write_file_3, write_var_u32};
+    use crate::{MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3};
+    use crate::compression::CompressionType;
+    use crate::encoding::{TimeEncoder, TSEncoding};
+    use crate::utils::{read_var_u32, write_var_u32};
 
     #[test]
     fn it_works() {
@@ -1243,35 +867,4 @@ mod tests {
         assert_eq!(buffer, [0b10010101, 0b10011010, 0b11101111, 0b00111010])
     }
 
-    #[test]
-    fn test_long_to_bytes() {
-        let mut result = vec![];
-        let width = 4;
-        TimeEncoder::long_to_bytes(1, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 2, width as u32);
-
-        assert_eq!(result, [0b00010001, 0b00010000])
-    }
-
-    #[test]
-    fn test_long_to_bytes_2() {
-        let mut result = vec![];
-        let width = 7;
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 2, width as u32);
-
-        assert_eq!(result, [0b00000010, 0b00000100, 0b00001000])
-    }
-
-    #[test]
-    fn test_long_to_bytes_3() {
-        let mut result = vec![];
-        let width = 7;
-        TimeEncoder::long_to_bytes(0, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(81, &mut result, width * 1, width as u32);
-
-        assert_eq!(result, [1, 68])
-    }
 }
