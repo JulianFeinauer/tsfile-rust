@@ -375,7 +375,8 @@ impl ChunkGroupMetadata<'_> {
 
 #[derive(Clone)]
 enum MetadataIndexNodeType {
-    LeafMeasurement
+    LeafMeasurement,
+    InternalMeasurement
 }
 
 struct TimeseriesMetadata {
@@ -412,9 +413,18 @@ impl MetadataIndexNode {
         measurement_metadata_index_queue.push(current_index_node.clone());
     }
 
+    fn generate_root_node(measurement_metadata_index_queue: &Vec<MetadataIndexNode>, file: &mut dyn PositionedWrite, node_type: MetadataIndexNodeType) -> MetadataIndexNode {
+        // TODO
+        MetadataIndexNode {
+            children: vec![],
+            end_offset: 0,
+            node_type
+        }
+    }
+
     #[allow(unused_variables)]
     fn construct_metadata_index(device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>, file: &mut dyn PositionedWrite) -> MetadataIndexNode {
-        let device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
+        let mut device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
 
         for (device, list_metadata) in device_timeseries_metadata_map.iter() {
             if list_metadata.is_empty() {
@@ -436,19 +446,73 @@ impl MetadataIndexNode {
                     }
                 }
                 if current_index_node.is_full() {
+                    // private static void addCurrentIndexNodeToQueue(
+                    //       MetadataIndexNode currentIndexNode,
+                    //       Queue<MetadataIndexNode> metadataIndexNodeQueue,
+                    //       TsFileOutput out)
+                    //       throws IOException {
+                    //     currentIndexNode.setEndOffset(out.getPosition());
+                    //     metadataIndexNodeQueue.add(currentIndexNode);
+                    //   }
                     //     addCurrentIndexNodeToQueue(currentIndexNode, measurementMetadataIndexQueue, out);
-            //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LeafMeasurement);
+                    //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LeafMeasurement);
+                    current_index_node.end_offset = file.get_position() as usize;
+                    measurement_metadata_index_queue.push(current_index_node.clone());
+
+                    current_index_node = MetadataIndexNode::new(MetadataIndexNodeType::LeafMeasurement);
+
                 }
                 current_index_node.children.push(
                     MetadataIndexEntry {
                         name: timeseries_metadata.measurement_id.clone().to_owned(),
-                        // TODO get position of buffer
                         offset: file.get_position() as usize
                     }
                 );
                 timeseries_metadata.serialize(file);
             }
+            // addCurrentIndexNodeToQueue(currentIndexNode, measurementMetadataIndexQueue, out);
+            // deviceMetadataIndexMap.put(
+            //       entry.getKey(),
+            //       generateRootNode(
+            //           measurementMetadataIndexQueue, out, MetadataIndexNodeType.INTERNAL_MEASUREMENT));
+            current_index_node.end_offset = file.get_position() as usize;
+            measurement_metadata_index_queue.push(current_index_node.clone());
+
+            device_metadata_index_map.insert(device.clone(), Self::generate_root_node(&measurement_metadata_index_queue, file, MetadataIndexNodeType::InternalMeasurement));
+
         }
+
+        // // if not exceed the max child nodes num, ignore the device index and directly point to the
+        // // measurement
+        // if (deviceMetadataIndexMap.size() <= config.getMaxDegreeOfIndexNode()) {
+        //   MetadataIndexNode metadataIndexNode =
+        //       new MetadataIndexNode(MetadataIndexNodeType.LEAF_DEVICE);
+        //   for (Map.Entry<String, MetadataIndexNode> entry : deviceMetadataIndexMap.entrySet()) {
+        //     metadataIndexNode.addEntry(new MetadataIndexEntry(entry.getKey(), out.getPosition()));
+        //     entry.getValue().serializeTo(out.wrapAsStream());
+        //   }
+        //   metadataIndexNode.setEndOffset(out.getPosition());
+        //   return metadataIndexNode;
+        // }
+        //
+        // // else, build level index for devices
+        // Queue<MetadataIndexNode> deviceMetadataIndexQueue = new ArrayDeque<>();
+        // MetadataIndexNode currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LEAF_DEVICE);
+        //
+        // for (Map.Entry<String, MetadataIndexNode> entry : deviceMetadataIndexMap.entrySet()) {
+        //   // when constructing from internal node, each node is related to an entry
+        //   if (currentIndexNode.isFull()) {
+        //     addCurrentIndexNodeToQueue(currentIndexNode, deviceMetadataIndexQueue, out);
+        //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LEAF_DEVICE);
+        //   }
+        //   currentIndexNode.addEntry(new MetadataIndexEntry(entry.getKey(), out.getPosition()));
+        //   entry.getValue().serializeTo(out.wrapAsStream());
+        // }
+        // addCurrentIndexNodeToQueue(currentIndexNode, deviceMetadataIndexQueue, out);
+        // MetadataIndexNode deviceMetadataIndexNode =
+        //     generateRootNode(deviceMetadataIndexQueue, out, MetadataIndexNodeType.INTERNAL_DEVICE);
+        // deviceMetadataIndexNode.setEndOffset(out.getPosition());
+        // return deviceMetadataIndexNode;
 
         // TODO remove
         MetadataIndexNode {
