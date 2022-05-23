@@ -1,8 +1,9 @@
 use std::io;
 use crate::{PositionedWrite, Serializable, write_var_u32};
 
-pub trait Statistics: Serializable {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32>;
+pub trait Statistics<T>: Serializable {
+    // fn to_struct_i32(&self) -> StatisticsStruct<i32>;
+    fn merge(&mut self, statistics: &dyn Statistics<T>);
 }
 
 #[derive(Copy, Clone)]
@@ -86,71 +87,15 @@ impl Serializable for StatisticsStruct<i32> {
     }
 }
 
-impl Statistics for StatisticsStruct<i32> {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32> {
-        self.clone()
-    }
-}
-
-#[derive(Copy, Clone)]
-#[allow(dead_code)]
-struct LongStatistics {
-    ts_first: i64,
-    ts_last: i64,
-
-    min_value: i64,
-    max_value: i64,
-    first_value: i64,
-    last_value: i64,
-    sum_value: i64,
-}
-
-#[allow(dead_code)]
-impl LongStatistics {
-    fn new() -> LongStatistics {
-        LongStatistics {
-            ts_first: i64::MAX,
-            ts_last: i64::MIN,
-            min_value: i64::MAX,
-            max_value: i64::MIN,
-            first_value: 0,
-            last_value: 0,
-            sum_value: 0,
-        }
-    }
-
-    fn update(&mut self, timestamp: i64, value: i64) {
-        if timestamp < self.ts_first {
-            self.ts_first = timestamp;
-            self.first_value = value;
-        }
-        if timestamp > self.ts_last {
-            self.ts_last = timestamp;
-            self.last_value = value;
-        }
-        if value < self.min_value {
-            self.min_value = value;
-        }
-        if value > self.max_value {
-            self.max_value = value;
-        }
-        self.sum_value += value;
-    }
-}
-
-impl Serializable for LongStatistics {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
-        file.write_all(&self.min_value.to_be_bytes());
-        file.write_all(&self.max_value.to_be_bytes());
-        file.write_all(&self.first_value.to_be_bytes());
-        file.write_all(&self.last_value.to_be_bytes());
-        file.write_all(&self.sum_value.to_be_bytes())
-    }
-}
-
-impl Statistics for LongStatistics {
-    fn to_struct_i32(&self) -> StatisticsStruct<i32> {
-        // this should not work!
+impl Statistics<i32> for StatisticsStruct<i32> {
+    fn merge(&mut self, statistics: &dyn Statistics<i32>) {
         todo!()
     }
 }
+
+//
+// impl<T> Serializable for StatisticsStruct<T> {
+//     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+//         todo!()
+//     }
+// }

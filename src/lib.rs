@@ -1,15 +1,17 @@
 #![allow(dead_code)]
 #![allow(unused_must_use)]
 
+use std::{io, vec};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
-use std::{io, vec};
+use std::ops::Deref;
 
 use compression::CompressionType;
-use encoding::{PlainInt32Encoder, TSEncoding, TimeEncoder};
+use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
 use statistics::{Statistics, StatisticsStruct};
 
 use crate::utils::write_var_u32;
@@ -467,7 +469,7 @@ impl MetadataIndexNode {
 
     #[allow(unused_variables)]
     fn construct_metadata_index(
-        device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>,
+        device_timeseries_metadata_map: &HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
         file: &mut dyn PositionedWrite,
     ) -> MetadataIndexNode {
         let mut device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
@@ -515,7 +517,7 @@ impl MetadataIndexNode {
                         MetadataIndexNode::new(MetadataIndexNodeType::LeafMeasurement);
                 }
                 current_index_node.children.push(MetadataIndexEntry {
-                    name: timeseries_metadata.measurement_id.clone().to_owned(),
+                    name: timeseries_metadata.get_measurement_id().clone().to_owned(),
                     offset: file.get_position() as usize,
                 });
                 timeseries_metadata.serialize(file);
@@ -582,16 +584,16 @@ impl MetadataIndexNode {
     }
 }
 
-struct TimeSeriesMetadata {
-    time_series_metadata_type: u8,
-    chunk_meta_data_list_data_size: usize,
-    measurement_id: String,
-    data_type: TSDataType,
-    statistics: Box<dyn Statistics>,
-    buffer: Vec<u8>,
+trait TimeSeriesMetadatable {
+    fn get_measurement_id(&self) -> String;
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()>;
 }
 
-impl Serializable for TimeSeriesMetadata {
+impl<T> TimeSeriesMetadatable for TimeSeriesMetadata<T> {
+    fn get_measurement_id(&self) -> String {
+        self.measurement_id.clone()
+    }
+
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         file.write_all(&[self.time_series_metadata_type]);
         write_str(file, self.measurement_id.as_str());
@@ -603,11 +605,33 @@ impl Serializable for TimeSeriesMetadata {
     }
 }
 
+
+struct TimeSeriesMetadata<T> {
+    time_series_metadata_type: u8,
+    chunk_meta_data_list_data_size: usize,
+    measurement_id: String,
+    data_type: TSDataType,
+    statistics: Box<dyn Statistics<T>>,
+    buffer: Vec<u8>,
+}
+//
+// impl<T> Serializable for TimeSeriesMetadata<T> {
+//     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+//         file.write_all(&[self.time_series_metadata_type]);
+//         write_str(file, self.measurement_id.as_str());
+//         file.write_all(&[self.data_type.serialize()]);
+//         write_var_u32(self.chunk_meta_data_list_data_size as u32, file);
+//         self.statistics.serialize(file);
+//         file.write_all(&self.buffer);
+//         Ok(())
+//     }
+// }
+
 struct TsFileWriter<'a> {
     filename: &'a str,
     group_writers: HashMap<&'a Path, GroupWriter<'a>>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
-    timeseries_metadata_map: HashMap<String, Vec<TimeSeriesMetadata>>,
+    timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
 }
 
 impl<'a> TsFileWriter<'a> {
@@ -646,7 +670,7 @@ impl<'a> TsFileWriter<'a> {
                 }
                 // Serialize
                 m.serialize(&mut buffer, serialize_statistic);
-                statistics.merge(&m.statistics.to_struct_i32());
+                statistics.merge(&m.statistics);
             }
 
             // Build Timeseries Index
@@ -674,7 +698,7 @@ impl<'a> TsFileWriter<'a> {
             self.timeseries_metadata_map
                 .get_mut(device_id)
                 .unwrap()
-                .push(timeseries_metadata);
+                .push(Box::new(timeseries_metadata));
         }
 
         return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, file);
@@ -988,13 +1012,10 @@ fn write_file() {
 mod tests {
     use std::collections::HashMap;
 
+    use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
     use crate::encoding::TSEncoding;
     use crate::utils::{read_var_u32, write_var_u32};
-    use crate::{
-        write_file, write_file_2, write_file_3, MeasurementGroup, MeasurementSchema, Path, Schema,
-        TSDataType, TsFileWriter, WriteWrapper,
-    };
 
     #[test]
     fn it_works() {
@@ -1054,9 +1075,9 @@ mod tests {
         };
         let mut writer = TsFileWriter::new("data3.tsfile", schema);
 
-        TsFileWriter::write(&mut writer, &d1, "s1", 1, 13);
-        TsFileWriter::write(&mut writer, &d1, "s1", 10, 14);
-        TsFileWriter::write(&mut writer, &d1, "s1", 100, 15);
+        TsFileWriter::write(&mut writer, &d1, "s1", 1, IoTDBValue::INT(13));
+        TsFileWriter::write(&mut writer, &d1, "s1", 10, IoTDBValue::INT(14));
+        TsFileWriter::write(&mut writer, &d1, "s1", 100, IoTDBValue::INT(15));
 
         let buffer: Vec<u8> = vec![];
 
