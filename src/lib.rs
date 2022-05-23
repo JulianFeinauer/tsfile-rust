@@ -181,18 +181,18 @@ trait Chunkeable<'a> {
     fn get_metadata(&self) -> ChunkMetadata<'a>;
 }
 
-struct ChunkWriter<'a, T> {
+struct ChunkWriter<T> {
     data_type: TSDataType,
     compression: CompressionType,
     encoding: TSEncoding,
-    measurement_id: &'a str,
+    measurement_id: String,
     current_page_writer: Option<PageWriter>,
     offset_of_chunk_header: Option<u64>,
     // Statistics
     statistics: StatisticsStruct<T>,
 }
 
-impl<'a> Chunkeable<'a> for ChunkWriter<'a, i32> {
+impl<'a> Chunkeable<'a> for ChunkWriter<i32> {
     fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<(), &str> {
         let value = match value {
             IoTDBValue::INT(val) => {
@@ -216,24 +216,6 @@ impl<'a> Chunkeable<'a> for ChunkWriter<'a, i32> {
         }
         let page_writer = self.current_page_writer.as_mut().unwrap();
         page_writer.write(timestamp, value)
-    }
-
-    fn get_metadata(&self) -> ChunkMetadata<'a> {
-        ChunkMetadata {
-            measurement_id: self.measurement_id,
-            data_type: self.data_type,
-            // FIXME add this
-            mask: 0,
-            offset_of_chunk_header: match self.offset_of_chunk_header {
-                None => {
-                    panic!("get_metadata called before offset is defined");
-                }
-                Some(offset) => {
-                    offset
-                }
-            } as i64,
-            statistics: self.statistics.clone(),
-        }
     }
 
     fn serialize(&mut self, file: &mut dyn PositionedWrite) {
@@ -274,7 +256,7 @@ impl<'a> Chunkeable<'a> for ChunkWriter<'a, i32> {
         self.offset_of_chunk_header = Some(file.get_position());
 
         file.write(&[5]).expect("write failed");   // Marker
-        write_str(file, self.measurement_id);
+        write_str(file, self.measurement_id.as_str());
         // Data Lenght
         utils::write_var_u32(page_buffer.len() as u32, file);
         // Data Type INT32 -> 1
@@ -288,17 +270,35 @@ impl<'a> Chunkeable<'a> for ChunkWriter<'a, i32> {
         // Write the full page
         file.write_all(&page_buffer);
     }
+
+    fn get_metadata(&self) -> ChunkMetadata<'a> {
+        ChunkMetadata {
+            measurement_id: self.measurement_id.as_str(),
+            data_type: self.data_type,
+            // FIXME add this
+            mask: 0,
+            offset_of_chunk_header: match self.offset_of_chunk_header {
+                None => {
+                    panic!("get_metadata called before offset is defined");
+                }
+                Some(offset) => {
+                    offset
+                }
+            } as i64,
+            statistics: self.statistics.clone(),
+        }
+    }
 }
 
-impl<'a, T> ChunkWriter<'a, T> {
-    pub(crate) fn new(measurement_id: &'a str, data_type: TSDataType, compression: CompressionType, encoding: TSEncoding) -> Box<dyn Chunkeable> {
+impl<'a, 'b, T> ChunkWriter<T> {
+    pub(crate) fn new(measurement_id: &'a str, data_type: TSDataType, compression: CompressionType, encoding: TSEncoding) -> Box<dyn Chunkeable<'b>> {
         match data_type {
             TSDataType::INT32 => {
-                let writer: ChunkWriter<'a, i32> = ChunkWriter {
+                let writer: ChunkWriter<i32> = ChunkWriter {
                     data_type,
                     compression,
                     encoding,
-                    measurement_id,
+                    measurement_id: measurement_id.to_owned(),
                     current_page_writer: None,
                     offset_of_chunk_header: None,
                     statistics: StatisticsStruct::new(),
@@ -699,7 +699,7 @@ impl TsFileWriter<'_> {
             (path, GroupWriter {
                 path,
                 chunk_writers: v.measurement_schemas.iter().map(|(&measurement_id, measurement_schema)| {
-                    (measurement_id, ChunkWriter::<'a, i32>::new(measurement_id, measurement_schema.data_type, measurement_schema.compression, measurement_schema.encoding))
+                    (measurement_id, ChunkWriter::<i32>::new(measurement_id, measurement_schema.data_type, measurement_schema.compression, measurement_schema.encoding))
                 }).collect(),
                 measurement_group: v,
             })
