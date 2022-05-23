@@ -1,21 +1,71 @@
+#![allow(dead_code)]
+#![allow(unused_must_use)]
+use std::{io, vec};
+use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::hash::Hash;
+use std::io::{Write};
+
+use compression::CompressionType;
+use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
+use statistics::{Statistics, StatisticsStruct};
+
+use crate::utils::write_var_u32;
+
 mod test;
 mod utils;
 mod encoding;
 mod compression;
 mod statistics;
 
-use std::{io, vec};
-use std::cmp::max;
-use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
-use std::fs::File;
-use std::hash::Hash;
-use std::io::{Read, Write};
-use compression::CompressionType;
-use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
-use statistics::{Statistics, StatisticsStruct};
-
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
+
+pub trait PositionedWrite: Write {
+
+    fn get_position(&self) -> u64;
+
+}
+
+struct WriteWrapper<T: Write> {
+    position: u64,
+    writer: T
+}
+
+impl<T: Write> Write for WriteWrapper<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self.writer.write(buf) {
+            Ok(size) => {
+                self.position += size as u64;
+                Ok(size)
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+impl<T: Write> PositionedWrite for WriteWrapper<T> {
+
+    fn get_position(&self) -> u64 {
+        self.position
+    }
+}
+
+impl<T: Write> WriteWrapper<T> {
+
+    fn new(writer: T) -> WriteWrapper<T> {
+        WriteWrapper {
+            position: 0,
+            writer
+        }
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum TSDataType {
@@ -126,6 +176,7 @@ struct ChunkWriter<'a> {
     encoding: TSEncoding,
     measurement_id: &'a str,
     current_page_writer: Option<PageWriter>,
+    offset_of_chunk_header: Option<u64>,
     // Statistics
     statistics: StatisticsStruct<i32>,
 }
@@ -138,6 +189,7 @@ impl<'a> ChunkWriter<'a> {
             encoding,
             measurement_id,
             current_page_writer: None,
+            offset_of_chunk_header: None,
             statistics: StatisticsStruct::new(),
         }
     }
@@ -159,7 +211,7 @@ impl<'a> ChunkWriter<'a> {
         page_writer.write(timestamp, value)
     }
 
-    pub(crate) fn serialize(&mut self, file: &mut dyn Write) {
+    pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
         // Before we can write the header we have to serialize the current page
         let buffer_size: u8 = match self.current_page_writer.as_mut() {
             Some(page_writer) => {
@@ -192,6 +244,10 @@ impl<'a> ChunkWriter<'a> {
         }
 
         // Chunk Header
+
+        // store offset for metadata
+        self.offset_of_chunk_header = Some(file.get_position());
+
         file.write(&[5]).expect("write failed");   // Marker
         write_str(file, self.measurement_id);
         // Data Lenght
@@ -214,8 +270,14 @@ impl<'a> ChunkWriter<'a> {
             data_type: self.data_type,
             // FIXME add this
             mask: 0,
-            // FIXME add this!
-            offset_of_chunk_header: 0,
+            offset_of_chunk_header: match self.offset_of_chunk_header {
+                None => {
+                    panic!("get_metadata called before offset is defined");
+                }
+                Some(offset) => {
+                    offset
+                }
+            } as i64,
             statistics: self.statistics.clone(),
         }
     }
@@ -240,7 +302,7 @@ impl<'a> GroupWriter<'a> {
         }
     }
 
-    fn serialize(&mut self, file: &mut dyn Write) -> Result<(), &str> {
+    fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), &str> {
         // Marker
         file.write(&[0]);
         // Chunk Group Header
@@ -280,14 +342,14 @@ impl Display for ChunkMetadata<'_> {
 }
 
 impl Serializable for ChunkMetadata<'_> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         file.write_all(&self.offset_of_chunk_header.to_be_bytes());
         self.statistics.serialize(file)
     }
 }
 
 impl ChunkMetadata<'_> {
-    fn serialize(&self, file: &mut dyn Write, serialize_statistics: bool) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite, serialize_statistics: bool) -> io::Result<()> {
         let result = file.write_all(&self.offset_of_chunk_header.to_be_bytes());
         if serialize_statistics {
             self.statistics.serialize(file);
@@ -313,7 +375,7 @@ impl ChunkGroupMetadata<'_> {
 
 #[derive(Clone)]
 enum MetadataIndexNodeType {
-    LEAF_MEASUREMENT
+    LeafMeasurement
 }
 
 struct TimeseriesMetadata {
@@ -342,15 +404,16 @@ impl MetadataIndexNode {
         }
     }
 
-    fn add_current_index_node_to_queue(current_index_node: &mut MetadataIndexNode, measurement_metadata_index_queue: &mut Vec<MetadataIndexNode>, file: &mut dyn Write) {
+    fn add_current_index_node_to_queue(current_index_node: &mut MetadataIndexNode, measurement_metadata_index_queue: &mut Vec<MetadataIndexNode>, file: &mut dyn PositionedWrite) {
         // TODO file.getPosition
         // currentIndexNode.setEndOffset(out.getPosition());
-        current_index_node.end_offset = 0;
+        current_index_node.end_offset = file.get_position() as usize;
         // metadataIndexNodeQueue.add(currentIndexNode);
         measurement_metadata_index_queue.push(current_index_node.clone());
     }
 
-    fn construct_metadata_index(device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>, file: &mut dyn Write) -> MetadataIndexNode {
+    #[allow(unused_variables)]
+    fn construct_metadata_index(device_timeseries_metadata_map: &HashMap<String, Vec<TimeSeriesMetadata>>, file: &mut dyn PositionedWrite) -> MetadataIndexNode {
         let device_metadata_index_map: HashMap<String, MetadataIndexNode> = HashMap::new();
 
         for (device, list_metadata) in device_timeseries_metadata_map.iter() {
@@ -361,25 +424,29 @@ impl MetadataIndexNode {
             let mut measurement_metadata_index_queue: Vec<MetadataIndexNode> = vec![];
 
             let timeseries_metadata: TimeseriesMetadata;
-            let mut current_index_node: MetadataIndexNode = MetadataIndexNode::new(MetadataIndexNodeType::LEAF_MEASUREMENT);
+            let mut current_index_node: MetadataIndexNode = MetadataIndexNode::new(MetadataIndexNodeType::LeafMeasurement);
 
             // for (int i = 0; i < entry.getValue().size(); i++) {
             for i in 0..list_metadata.len() {
                 let timeseries_metadata = list_metadata.get(i).unwrap();
-                if (i % GET_MAX_DEGREE_OF_INDEX_NODE == 0) {
+                if i % GET_MAX_DEGREE_OF_INDEX_NODE == 0 {
                     if current_index_node.is_full() {
                         Self::add_current_index_node_to_queue(&mut current_index_node, &mut measurement_metadata_index_queue, file);
-                        current_index_node = MetadataIndexNode::new(MetadataIndexNodeType::LEAF_MEASUREMENT);
+                        current_index_node = MetadataIndexNode::new(MetadataIndexNodeType::LeafMeasurement);
                     }
                 }
-            //   if (currentIndexNode.isFull()) {
-            //     addCurrentIndexNodeToQueue(currentIndexNode, measurementMetadataIndexQueue, out);
-            //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LEAF_MEASUREMENT);
-            //   }
-            //   currentIndexNode.addEntry(
-            //       new MetadataIndexEntry(timeseriesMetadata.getMeasurementId(), out.getPosition()));
-            // }
-            // timeseriesMetadata.serializeTo(out.wrapAsStream());
+                if current_index_node.is_full() {
+                    //     addCurrentIndexNodeToQueue(currentIndexNode, measurementMetadataIndexQueue, out);
+            //     currentIndexNode = new MetadataIndexNode(MetadataIndexNodeType.LeafMeasurement);
+                }
+                current_index_node.children.push(
+                    MetadataIndexEntry {
+                        name: timeseries_metadata.measurement_id.clone().to_owned(),
+                        // TODO get position of buffer
+                        offset: file.get_position() as usize
+                    }
+                );
+                timeseries_metadata.serialize(file);
             }
         }
 
@@ -387,7 +454,7 @@ impl MetadataIndexNode {
         MetadataIndexNode {
             children: vec![],
             end_offset: 0,
-            node_type: MetadataIndexNodeType::LEAF_MEASUREMENT
+            node_type: MetadataIndexNodeType::LeafMeasurement
         }
     }
     fn is_full(&self) -> bool {
@@ -402,6 +469,18 @@ struct TimeSeriesMetadata {
     data_type: TSDataType,
     statistics: Box<dyn Statistics>,
     buffer: Vec<u8>,
+}
+
+impl Serializable for TimeSeriesMetadata {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        file.write_all(&[self.time_series_metadata_type]);
+        write_str(file, self.measurement_id.as_str());
+        file.write_all(&[self.data_type.serialize()]);
+        write_var_u32(self.chunk_meta_data_list_data_size as u32, file);
+        self.statistics.serialize(file);
+        file.write_all(&self.buffer);
+        Ok(())
+    }
 }
 
 struct TsFileWriter<'a> {
@@ -423,7 +502,7 @@ impl<'a> TsFileWriter<'a> {
         }
     }
 
-    fn flush_metadata_index(&mut self, file: &mut dyn Write, chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>) -> MetadataIndexNode {
+    fn flush_metadata_index(&mut self, file: &mut dyn PositionedWrite, chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>) -> MetadataIndexNode {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
@@ -471,7 +550,8 @@ impl<'a> TsFileWriter<'a> {
         return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, file);
     }
 
-    pub(crate) fn _flush<'b>(&mut self, file: &'b mut dyn Write) -> Result<(), &str> {
+    #[allow(unused_variables)]
+    pub(crate) fn _flush<'b>(&mut self, file: &'b mut dyn PositionedWrite) -> Result<(), &str> {
         // Start to write to file
         // Header
         // let mut file = File::create(self.filename).expect("create failed");
@@ -506,11 +586,13 @@ impl<'a> TsFileWriter<'a> {
             }
         }
 
+        // Write Marker 0x02
+        file.write_all(&[0x02]);
+
         let metadata_index_node = self.flush_metadata_index(file, &chunk_metadata_map);
 
-
         // TODO Write "real" statistics
-        let statistics = [0x02, 0x00, 0x04, 0x73, 0x31, 0x01, 0x08, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x01, 0x04, 0x73, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6B, 0x03, 0x01, 0x04, 0x64, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x33, 0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05, 0x00, 0x00, 0x00];
+        let statistics = [0x01, 0x04, 0x73, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6B, 0x03, 0x01, 0x04, 0x64, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x33, 0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05, 0x00, 0x00, 0x00];
         file.write_all(&statistics);
 
         // Footer
@@ -519,7 +601,7 @@ impl<'a> TsFileWriter<'a> {
     }
 
     pub(crate) fn flush(&mut self) -> Result<(), &str> {
-        let mut file = File::create(self.filename).expect("create failed");
+        let mut file = WriteWrapper::new(File::create(self.filename).expect("create failed"));
         self._flush(&mut file)
     }
 }
@@ -563,7 +645,7 @@ struct ChunkGroupHeader<'a> {
 }
 
 impl Serializable for ChunkGroupHeader<'_> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         file.write_all(&[0])?;
         write_str(file, &self.device_id);
         Ok(())
@@ -576,7 +658,7 @@ struct ChunkGroup<'a> {
 }
 
 impl Serializable for ChunkGroup<'_> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         self.header.serialize(file)
     }
 }
@@ -602,7 +684,7 @@ impl ChunkHeader<'_> {
 }
 
 pub trait Serializable {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()>;
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()>;
 }
 
 struct Chunk<'a> {
@@ -611,12 +693,12 @@ struct Chunk<'a> {
 }
 
 impl Serializable for Chunk<'_> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         self.header.serialize(file)
     }
 }
 
-fn write_str(file: &mut dyn Write, s: &str) -> io::Result<()> {
+fn write_str(file: &mut dyn PositionedWrite, s: &str) -> io::Result<()> {
     let len = s.len() as u8 + 2;
     file.write(&[len]).expect("write failed");   // lenght (?)
     let bytes = s.as_bytes();
@@ -625,7 +707,7 @@ fn write_str(file: &mut dyn Write, s: &str) -> io::Result<()> {
 }
 
 impl Serializable for ChunkHeader<'_> {
-    fn serialize(&self, file: &mut dyn Write) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         // Chunk Header
         file.write(&[5]).expect("write failed");   // Marker
         write_str(file, &self.measurement_id);
@@ -676,7 +758,7 @@ fn write_file_3() {
 fn write_file_2() {
     std::fs::remove_file("data2.tsfile");
 
-    let mut file = File::create("data2.tsfile").expect("create failed");
+    let mut file = WriteWrapper::new(File::create("data2.tsfile").expect("create failed"));
     let version: [u8; 1] = [3];
 
     // Header
@@ -741,9 +823,9 @@ fn write_file() {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3};
+    use crate::{MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
-    use crate::encoding::{TimeEncoder, TSEncoding};
+    use crate::encoding::{TSEncoding};
     use crate::utils::{read_var_u32, write_var_u32};
 
     #[test]
@@ -769,7 +851,9 @@ mod tests {
 
     #[test]
     fn write_file_test_4() {
-        let expectation = [0x54, 0x73, 0x46, 0x69, 0x6C, 0x65, 0x03, 0x00, 0x04, 0x64, 0x31, 0x05, 0x04, 0x73, 0x31, 0x20, 0x01, 0x00, 0x00, 0x1E, 0x1E, 0x1A, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x44, 0x1A, 0x1C, 0x1E];
+        let expectation = [0x54, 0x73, 0x46, 0x69, 0x6C, 0x65, 0x03, 0x00, 0x04, 0x64, 0x31, 0x05, 0x04, 0x73, 0x31, 0x20, 0x01, 0x00, 0x00, 0x1E, 0x1E, 0x1A, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x44, 0x1A, 0x1C, 0x1E,
+            // TODO make this in HEX
+            2, 0, 4, 115, 49, 1, 8, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 13, 0, 0, 0, 15, 0, 0, 0, 13, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 11, 1, 4, 115, 49, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 107, 3, 1, 4, 100, 49, 0, 0, 0, 0, 0, 0, 0, 107, 0, 0, 0, 0, 0, 0, 0, 128, 1, 0, 0, 0, 0, 0, 0, 0, 51, 31, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 128, 2, 5, 0, 0, 0, 64, 84, 115, 70, 105, 108, 101];
 
         let measurement_schema = MeasurementSchema {
             measurement_id: "s1",
@@ -795,10 +879,14 @@ mod tests {
         TsFileWriter::write(&mut writer, &d1, "s1", 10, 14);
         TsFileWriter::write(&mut writer, &d1, "s1", 100, 15);
 
-        let mut buffer: Vec<u8> = vec![];
-        writer._flush(&mut buffer);
+        let buffer: Vec<u8> = vec![];
 
-        assert_eq!(buffer, expectation);
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        writer._flush(&mut buffer_writer);
+
+        assert_eq!(buffer_writer.writer, expectation);
+        assert_eq!(buffer_writer.position, 202);
     }
 
     #[test]

@@ -74,7 +74,6 @@ mod testsabc {
 
     #[test]
     fn it_works() {
-        let chunk: Chunk<i32> = Chunk::new();
         let mut cg = ChunkGroup {
             chunks: vec![Box::new(Chunk::<i32>::new()),
                          Box::new(Chunk::<f32>::new()),

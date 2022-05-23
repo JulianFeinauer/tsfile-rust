@@ -1,6 +1,7 @@
-use std::io::{Read, Write};
+use std::io::{Read};
+use crate::PositionedWrite;
 
-pub fn write_var_u32(num: u32, buffer: &mut dyn Write) -> u8 {
+pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
     let mut number = num.clone();
 
     // Now compress them
@@ -17,12 +18,12 @@ pub fn write_var_u32(num: u32, buffer: &mut dyn Write) -> u8 {
     return position;
 }
 
-pub fn write_var_i32(num: i32, buffer: &mut dyn Write) -> u8 {
-    let mut uValue = num << 1;
+pub fn write_var_i32(num: i32, buffer: &mut dyn PositionedWrite) -> u8 {
+    let mut u_value = num << 1;
     if num < 0 {
-        uValue = !uValue;
+        u_value = !u_value;
     }
-    return write_var_u32(uValue as u32, buffer);
+    return write_var_u32(u_value as u32, buffer);
 }
 
 fn read_byte(buffer: &mut dyn Read) -> u8 {

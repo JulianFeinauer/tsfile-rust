@@ -1,6 +1,6 @@
 use std::cmp::max;
 use std::io::Write;
-use crate::{Encoder, utils};
+use crate::{Encoder, PositionedWrite, utils};
 
 #[derive(Copy, Clone)]
 pub enum TSEncoding {
@@ -17,6 +17,12 @@ impl TSEncoding {
 
 pub struct PlainInt32Encoder {
     values: Vec<i32>,
+}
+
+impl PositionedWrite for Vec<u8> {
+    fn get_position(&self) -> u64 {
+        todo!()
+    }
 }
 
 impl PlainInt32Encoder {
@@ -111,6 +117,7 @@ impl TimeEncoder {
         }
     }
 
+    #[allow(unused_variables)]
     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
         // Preliminary calculations
         let mut delta_block_buffer: Vec<i64> = vec![];
