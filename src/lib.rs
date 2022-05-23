@@ -2,13 +2,11 @@
 #![allow(unused_must_use)]
 
 use std::{io, vec};
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
-use std::ops::Deref;
 
 use compression::CompressionType;
 use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
@@ -660,7 +658,7 @@ impl<'a> TsFileWriter<'a> {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
-            let mut statistics: StatisticsStruct<i32> = StatisticsStruct::new();
+            let mut statistics: StatisticsStruct<i32> = StatisticsStruct::<i32>::new();
 
             let mut buffer: Vec<u8> = vec![];
 
