@@ -413,6 +413,7 @@ impl MetadataIndexNode {
         measurement_metadata_index_queue.push(current_index_node.clone());
     }
 
+    #[allow(unused_variables)]
     fn generate_root_node(measurement_metadata_index_queue: &Vec<MetadataIndexNode>, file: &mut dyn PositionedWrite, node_type: MetadataIndexNodeType) -> MetadataIndexNode {
         // TODO
         MetadataIndexNode {
