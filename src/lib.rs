@@ -305,7 +305,7 @@ impl<'a, 'b, T> ChunkWriter<T> {
                     measurement_id: measurement_id.to_owned(),
                     current_page_writer: None,
                     offset_of_chunk_header: None,
-                    statistics: StatisticsStruct::new(),
+                    statistics: StatisticsStruct::<i32>::new(),
                 };
                 Box::new(writer)
             }
