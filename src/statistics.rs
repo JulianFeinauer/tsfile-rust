@@ -1,5 +1,5 @@
 use std::io;
-use std::os::macos::raw::stat;
+
 use crate::{PositionedWrite, Serializable, write_var_u32};
 
 pub trait Statistics<T>: Serializable {}
@@ -103,6 +103,7 @@ macro_rules! implement_int_statistics {
     }
 
 implement_int_statistics!(i32);
-implement_statistics!(i64);
-implement_statistics!(f32);
-implement_statistics!(f64);
+// TODO Implement / use
+// implement_statistics!(i64);
+// implement_statistics!(f32);
+// implement_statistics!(f64);

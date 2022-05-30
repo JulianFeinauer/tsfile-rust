@@ -30,11 +30,7 @@ impl Murmur128 {
 
 
   fn rotl64(v: i64, n: i64) -> i64 {
-    let a = (64 - n);
-    let b = ((v as u64) >> a) as i64;
-    let c = (v << n);
-    let d = (c | b);
-    return d;
+    (v << n) | ((v as u64) >> (64 - n)) as i64
   }
 
   #[allow(overflowing_literals)]
@@ -53,8 +49,8 @@ impl Murmur128 {
     let nblocks = length >> 4; // Process as 128-bit blocks.
     let mut h1 = seed;
     let mut h2 = seed;
-    let mut c1 = 0x87c37b91114253d5;
-    let mut c2 = 0x4cf5ad432745937f;
+    let c1 = 0x87c37b91114253d5;
+    let c2 = 0x4cf5ad432745937f;
     // ----------
     // body
     for i in 0..nblocks {
@@ -82,9 +78,9 @@ impl Murmur128 {
     let mut k1 = 0;
     let mut k2 = 0;
     let mut identifier = length & 15;
-    // Dirty trick to simulate fallthrough in java
+    // Dirty trick to simulate fallthrough in javas case
     while identifier > 0 {
-      match (identifier) {
+      match identifier {
         15 => {
           k2 ^= (key[offset + 14] as i64) << 48;
         },

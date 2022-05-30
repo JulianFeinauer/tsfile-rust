@@ -1,20 +1,18 @@
-#![allow(dead_code)]
 #![allow(unused_must_use)]
 
-use std::{error, io, vec};
-use std::cmp::{max, min};
+use std::{io, vec};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
-use std::io::{Cursor, Write};
+use std::io::Write;
 
 use compression::CompressionType;
 use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
 use statistics::{Statistics, StatisticsStruct};
+
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
-
 use crate::utils::write_var_u32;
 
 mod compression;
@@ -33,6 +31,7 @@ const MINIMAL_SIZE: i32 = 256;
 const MAXIMAL_HASH_FUNCTION_SIZE: i32 = 8;
 const SEEDS: [u8; 8] = [5, 7, 11, 19, 31, 37, 43, 59];
 
+#[allow(dead_code)]
 enum IoTDBValue {
     DOUBLE(f64),
     FLOAT(f32),
@@ -93,7 +92,6 @@ impl TSDataType {
 }
 
 struct MeasurementSchema {
-    measurement_id: String,
     data_type: TSDataType,
     encoding: TSEncoding,
     compression: CompressionType,
@@ -112,13 +110,11 @@ impl Display for Path {
 
 impl MeasurementSchema {
     fn new(
-        measurement_id: String,
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
     ) -> MeasurementSchema {
         MeasurementSchema {
-            measurement_id,
             data_type,
             encoding,
             compression,
@@ -141,7 +137,10 @@ struct PageWriter {
     buffer: Vec<u8>,
 }
 
+
 impl PageWriter {
+    // TODO why is this never called?
+    #[allow(dead_code)]
     pub(crate) fn serialize(&self, file: &mut File, compression: CompressionType) {
         if compression != CompressionType::UNCOMPRESSED {
             panic!("Only uncompressed is supported now!")
@@ -324,7 +323,6 @@ impl<'a, 'b, T> ChunkWriter<T> {
 
 struct GroupWriter {
     path: Path,
-    measurement_group: MeasurementGroup,
     chunk_writers: HashMap<String, Box<dyn Chunkeable>>,
 }
 
@@ -358,14 +356,14 @@ impl GroupWriter {
     }
 
     fn get_metadata(&self) -> ChunkGroupMetadata {
-        ChunkGroupMetadata {
-            device_id: self.path.path.clone(),
-            chunk_metadata: self
+        ChunkGroupMetadata::new(
+            self.path.path.clone(),
+            self
                 .chunk_writers
                 .iter()
                 .map(|(_, cw)| cw.get_metadata())
                 .collect(),
-        }
+        )
     }
 }
 
@@ -412,10 +410,10 @@ struct ChunkGroupMetadata {
 }
 
 impl ChunkGroupMetadata {
-    fn new<'a>(device_id: String) -> ChunkGroupMetadata {
+    fn new(device_id: String, chunk_metadata: Vec<ChunkMetadata>) -> ChunkGroupMetadata {
         return ChunkGroupMetadata {
             device_id,
-            chunk_metadata: vec![],
+            chunk_metadata,
         };
     }
 }
@@ -723,13 +721,6 @@ impl MetadataIndexNode {
         //     generateRootNode(deviceMetadataIndexQueue, out, MetadataIndexNodeType.INTERNAL_DEVICE);
         // deviceMetadataIndexNode.setEndOffset(out.getPosition());
         // return deviceMetadataIndexNode;
-
-        // TODO remove
-        MetadataIndexNode {
-            children: vec![],
-            end_offset: 0,
-            node_type: MetadataIndexNodeType::LeafMeasurement,
-        }
     }
     fn is_full(&self) -> bool {
         return self.children.len() >= GET_MAX_DEGREE_OF_INDEX_NODE;
@@ -874,7 +865,7 @@ impl BloomFilter {
             (self.bit_set.len() + (self.bit_set.len() % 8)) / 8
         };
 
-        let mut result = vec![0 as u8; (number_of_bytes - 1)];
+        let mut result = vec![0 as u8; number_of_bytes - 1];
 
         println!("Result length: {}", &result.len());
 
@@ -1140,7 +1131,6 @@ impl TsFileWriter {
                                 )
                             })
                             .collect(),
-                        measurement_group: v,
                     },
                 )
             })
@@ -1159,15 +1149,6 @@ trait Encoder<DataType> {
     fn encode(&mut self, value: DataType);
 }
 
-struct Int32Page {
-    times: Vec<i64>,
-    values: Vec<i32>,
-}
-
-impl Int32Page {
-    fn flush_to_buffer(&self) {}
-}
-
 struct ChunkGroupHeader<'a> {
     device_id: &'a str,
 }
@@ -1182,7 +1163,6 @@ impl Serializable for ChunkGroupHeader<'_> {
 
 struct ChunkGroup<'a> {
     header: ChunkGroupHeader<'a>,
-    pages: Vec<Int32Page>,
 }
 
 impl Serializable for ChunkGroup<'_> {
@@ -1194,9 +1174,6 @@ impl Serializable for ChunkGroup<'_> {
 struct ChunkHeader<'a> {
     measurement_id: &'a str,
     data_size: u8,
-    data_type: u8,
-    compression: u8,
-    encoding: u8,
 }
 
 impl ChunkHeader<'_> {
@@ -1204,9 +1181,6 @@ impl ChunkHeader<'_> {
         return ChunkHeader {
             measurement_id,
             data_size: 0x20,
-            data_type: 1,
-            compression: 0,
-            encoding: 0,
         };
     }
 }
@@ -1217,7 +1191,6 @@ pub trait Serializable {
 
 struct Chunk<'a> {
     header: ChunkHeader<'a>,
-    num_pages: u8,
 }
 
 impl Serializable for Chunk<'_> {
@@ -1253,12 +1226,11 @@ impl Serializable for ChunkHeader<'_> {
 
 #[warn(dead_code)]
 pub fn write_file_3() {
-    let measurement_schema = MeasurementSchema {
-        measurement_id: String::from("s1"),
-        data_type: TSDataType::INT32,
-        encoding: TSEncoding::PLAIN,
-        compression: CompressionType::UNCOMPRESSED,
-    };
+    let measurement_schema = MeasurementSchema::new(
+        TSDataType::INT32,
+        TSEncoding::PLAIN,
+        CompressionType::UNCOMPRESSED,
+    );
 
     let mut measurement_schema_map = HashMap::new();
     measurement_schema_map.insert(String::from("s1"), measurement_schema);
@@ -1300,10 +1272,6 @@ fn write_file_2() {
 
     let cg = ChunkGroup {
         header: ChunkGroupHeader { device_id: "d1" },
-        pages: vec![Int32Page {
-            times: vec![0],
-            values: vec![13],
-        }],
     };
 
     &cg.serialize(&mut file);
@@ -1392,12 +1360,11 @@ mod tests {
             0, 2, 128, 2, 5, 0, 0, 0, 64, 84, 115, 70, 105, 108, 101,
         ];
 
-        let measurement_schema = MeasurementSchema {
-            measurement_id: String::from("s1"),
-            data_type: TSDataType::INT32,
-            encoding: TSEncoding::PLAIN,
-            compression: CompressionType::UNCOMPRESSED,
-        };
+        let measurement_schema = MeasurementSchema::new(
+            TSDataType::INT32,
+            TSEncoding::PLAIN,
+            CompressionType::UNCOMPRESSED,
+        );
 
         let mut measurement_schema_map = HashMap::new();
         measurement_schema_map.insert(String::from("s1"), measurement_schema);
