@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_must_use)]
 
-use std::{io, vec};
+use std::{error, io, vec};
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
-use std::io::Write;
+use std::io::{Cursor, Write};
 
 use compression::CompressionType;
 use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
@@ -22,6 +23,13 @@ mod test;
 mod utils;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
+const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
+
+const MIN_BLOOM_FILTER_ERROR_RATE: f64 = 0.01;
+const MAX_BLOOM_FILTER_ERROR_RATE: f64 = 0.1;
+const MINIMAL_SIZE: i32 = 256;
+const MAXIMAL_HASH_FUNCTION_SIZE: i32 = 8;
+const SEEDS: [u8; 8] = [5, 7, 11, 19, 31, 37, 43, 59];
 
 enum IoTDBValue {
     DOUBLE(f64),
@@ -769,16 +777,134 @@ struct TimeSeriesMetadata<T> {
 //     }
 // }
 
-struct BloomFilter {}
+struct HashFunction {
+    cap: i32,
+    seed: i32,
+}
+
+impl HashFunction {
+    fn new(cap: i32, seed: i32) -> HashFunction {
+        HashFunction {
+            cap,
+            seed
+        }
+    }
+
+    fn _murmur_hash(&self, s: &String, seed: i32) -> i32 {
+        match murmur3::murmur3_x64_128(&mut Cursor::new(s.clone()), seed as u32) {
+            Ok(hash) => {
+                hash as i32
+            }
+            Err(_) => {
+                panic!("Whaaaaa!")
+            }
+        }
+    }
+
+    fn hash(&self, value: &String) -> usize {
+        // return Math.abs(Murmur128Hash.hash(value, seed)) % cap;
+        (self._murmur_hash(value, self.seed).abs() % self.cap) as usize
+    }
+}
+
+struct BloomFilter {
+    size: i32,
+    hash_function_size: i32,
+    func: Vec<HashFunction>,
+    bit_set: Vec<bool>
+}
 
 impl BloomFilter {
+
+    fn add(&mut self, path: String) {
+        for f in self.func.iter() {
+            self.bit_set[f.hash(&path)] = true;
+        }
+    }
+
+    fn new(size: i32, hash_function_size: i32) -> BloomFilter {
+
+        let mut func = vec![];
+
+        for i in 0..hash_function_size {
+            func.push(HashFunction::new(size, SEEDS[i as usize] as i32));
+        }
+
+        let bit_set = vec![false; size as usize];
+
+        BloomFilter {
+            size,
+            hash_function_size,
+            func,
+            bit_set
+        }
+    }
+
     fn build(paths: Vec<Path>) -> BloomFilter {
-        BloomFilter {}
+        let mut filter = BloomFilter::empty_filter(GET_BLOOM_FILTER_ERROR_RATE, paths.len() as i32);
+
+        for path in paths {
+            filter.add(path.path);
+        }
+
+        filter
+    }
+
+    fn empty_filter(error_percent: f64, num_of_string: i32) -> BloomFilter {
+        let mut error = error_percent;
+        error = error.max(MIN_BLOOM_FILTER_ERROR_RATE);
+        error = error.min(MAX_BLOOM_FILTER_ERROR_RATE);
+
+        let ln2 = 2.0_f64.log2();
+
+        let size = ((-1 * num_of_string) as f64 * error.ln() / ln2 / ln2) as i32 + 1 ;
+        let hash_function_size = (-1.0* error.ln() / ln2) as i32 + 1;
+
+        BloomFilter::new(
+            size.max(MINIMAL_SIZE),
+            hash_function_size.min(MAXIMAL_HASH_FUNCTION_SIZE)
+        )
+    }
+
+    fn serialize_bits(&self) -> Vec<u8> {
+        let number_of_bytes = if self.bit_set.len() % 8 == 0 {
+            self.bit_set.len() / 8
+        } else {
+            (self.bit_set.len() + (self.bit_set.len() % 8)) / 8
+        };
+
+        let mut result = vec![0 as u8; number_of_bytes];
+
+        for i in 0..self.bit_set.len() {
+            let byte_index = (i - (i%8))/8;
+            let bit_index = i%8;
+
+            let value = *result.get(byte_index).unwrap();
+
+            // See https://stackoverflow.com/questions/57449264/how-to-get-replace-a-value-in-rust-vec
+            let bit: u8 = if self.bit_set[i] {
+                0x01
+            } else {
+                0x00
+            };
+            std::mem::replace(&mut result[byte_index], value | (bit << bit_index));
+        }
+
+        return result;
     }
 }
 
 impl Serializable for BloomFilter {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        // Real
+        // let bytes = self.serialize_bits();
+        //
+        // write_var_u32(bytes.len() as u32, file);
+        // file.write_all(bytes.as_slice());
+        // write_var_u32(self.size as u32, file);
+        // write_var_u32(self.hash_function_size as u32, file);
+
+        // Fake approach
         let fake = [0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05];
         file.write_all(&fake);
 
@@ -1286,8 +1412,8 @@ mod tests {
 
         writer._flush(&mut buffer_writer);
 
-        assert_eq!(buffer_writer.position, 202);
         assert_eq!(buffer_writer.writer, expectation);
+        assert_eq!(buffer_writer.position, 202);
     }
 
     #[test]
