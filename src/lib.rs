@@ -7,17 +7,15 @@ use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 
 use compression::CompressionType;
 use encoding::{TimeEncoder, TSEncoding};
-use statistics::{Statistics, StatisticsStruct};
 use crate::chunk_writer::{Chunkeable, ChunkMetadata, ChunkWriter};
 use crate::encoding::Encoder;
 
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
-use crate::statistics::StatisticsEnum;
+use crate::statistics::Statistics;
 use crate::utils::write_var_u32;
 
 mod compression;
@@ -578,7 +576,7 @@ struct TimeSeriesMetadata {
     chunk_meta_data_list_data_size: usize,
     measurement_id: String,
     data_type: TSDataType,
-    statistics: StatisticsEnum,
+    statistics: Statistics,
     buffer: Vec<u8>,
 }
 //
@@ -794,7 +792,7 @@ impl TsFileWriter {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
-            let mut statistics = StatisticsEnum::new(data_type);
+            let mut statistics = Statistics::new(data_type);
             let mut buffer: Vec<u8> = vec![];
 
             for m in metadata {

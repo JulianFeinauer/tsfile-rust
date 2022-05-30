@@ -1,21 +1,20 @@
-use std::any::Any;
 use std::io;
 
 use crate::{PositionedWrite, Serializable, TSDataType, write_var_u32};
 
 #[derive(Clone)]
-pub enum StatisticsEnum {
+pub enum Statistics {
     INT32(StatisticsStruct<i32>),
     INT64(StatisticsStruct<i64>),
     FLOAT(StatisticsStruct<f32>),
 }
 
-impl StatisticsEnum {
-    pub(crate) fn merge(&mut self, other: &StatisticsEnum) {
+impl Statistics {
+    pub(crate) fn merge(&mut self, other: &Statistics) {
         match self {
-            StatisticsEnum::INT32(s) => {
+            Statistics::INT32(s) => {
                 match other {
-                    StatisticsEnum::INT32(othr) => {
+                    Statistics::INT32(othr) => {
                         s.merge(othr)
                     }
                     _ => {
@@ -23,9 +22,9 @@ impl StatisticsEnum {
                     }
                 }
             }
-            StatisticsEnum::INT64(s) => {
+            Statistics::INT64(s) => {
                 match other {
-                    StatisticsEnum::INT64(othr) => {
+                    Statistics::INT64(othr) => {
                         s.merge(othr)
                     }
                     _ => {
@@ -33,9 +32,9 @@ impl StatisticsEnum {
                     }
                 }
             }
-            StatisticsEnum::FLOAT(s) => {
+            Statistics::FLOAT(s) => {
                 match other {
-                    StatisticsEnum::FLOAT(othr) => {
+                    Statistics::FLOAT(othr) => {
                         s.merge(othr)
                     }
                     _ => {
@@ -47,40 +46,36 @@ impl StatisticsEnum {
     }
 }
 
-impl StatisticsEnum {
-    pub fn new(data_type: TSDataType) -> StatisticsEnum {
+impl Statistics {
+    pub fn new(data_type: TSDataType) -> Statistics {
         match data_type {
             TSDataType::INT32 => {
-                StatisticsEnum::INT32(StatisticsStruct::<i32>::new())
+                Statistics::INT32(StatisticsStruct::<i32>::new())
             }
             TSDataType::INT64 => {
-                StatisticsEnum::INT64(StatisticsStruct::<i64>::new())
+                Statistics::INT64(StatisticsStruct::<i64>::new())
             }
             TSDataType::FLOAT => {
-                StatisticsEnum::FLOAT(StatisticsStruct::<f32>::new())
+                Statistics::FLOAT(StatisticsStruct::<f32>::new())
             }
         }
     }
 }
 
-impl Serializable for StatisticsEnum {
+impl Serializable for Statistics {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         match self {
-            StatisticsEnum::INT32(s) => {
+            Statistics::INT32(s) => {
                 s.serialize(file)
             }
-            StatisticsEnum::INT64(s) => {
+            Statistics::INT64(s) => {
                 s.serialize(file)
             }
-            StatisticsEnum::FLOAT(s) => {
+            Statistics::FLOAT(s) => {
                 s.serialize(file)
             }
         }
     }
-}
-
-pub trait Statistics: Serializable {
-    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Copy, Clone)]
@@ -166,12 +161,6 @@ macro_rules! implement_statistics {
                     file.write_all(&self.first_value.to_be_bytes());
                     file.write_all(&self.last_value.to_be_bytes());
                     file.write_all(&self.sum_value.to_be_bytes())
-                }
-            }
-
-            impl Statistics for StatisticsStruct<$type> {
-                fn as_any(&self) -> &dyn Any {
-                    self
                 }
             }
         }

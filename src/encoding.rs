@@ -1,6 +1,6 @@
 use std::cmp::max;
 use std::io::Write;
-use crate::{PositionedWrite, Serializable, utils};
+use crate::{PositionedWrite, utils};
 
 #[derive(Copy, Clone)]
 pub enum TSEncoding {

@@ -1,9 +1,9 @@
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use crate::{CompressionType, IoTDBValue, PageWriter, PositionedWrite, Serializable, Statistics, StatisticsStruct, TSDataType, TSEncoding, utils, write_str};
+use crate::{CompressionType, IoTDBValue, PageWriter, PositionedWrite, Serializable, TSDataType, TSEncoding, utils, write_str};
 use crate::encoding::PlainIntEncoder;
-use crate::statistics::StatisticsEnum;
+use crate::statistics::Statistics;
 
 #[derive(Clone)]
 pub struct ChunkMetadata {
@@ -11,53 +11,8 @@ pub struct ChunkMetadata {
     pub(crate) data_type: TSDataType,
     pub(crate) mask: u8,
     offset_of_chunk_header: i64,
-    // statistics: Box<dyn Statistics>,
-    pub(crate) statistics: StatisticsEnum,
+    pub(crate) statistics: Statistics,
 }
-
-// impl Clone for ChunkMetadata {
-//     fn clone(&self) -> Self {
-//         let cloned: Box<dyn Statistics> = match self.data_type {
-//             TSDataType::INT32 => {
-//                 match self.statistics.as_any().downcast_ref::<StatisticsStruct<i32>>() {
-//                     None => {
-//                         panic!("Whaaa")
-//                     }
-//                     Some(statistic) => {
-//                         Box::new(statistic.clone())
-//                     }
-//                 }
-//             }
-//             TSDataType::INT64 => {
-//                 match self.statistics.as_any().downcast_ref::<StatisticsStruct<i64>>() {
-//                     None => {
-//                         panic!("Whaaa")
-//                     }
-//                     Some(statistic) => {
-//                         Box::new(statistic.clone())
-//                     }
-//                 }
-//             }
-//             TSDataType::FLOAT => {
-//                 match self.statistics.as_any().downcast_ref::<StatisticsStruct<f32>>() {
-//                     None => {
-//                         panic!("Whaaa")
-//                     }
-//                     Some(statistic) => {
-//                         Box::new(statistic.clone())
-//                     }
-//                 }
-//             }
-//         };
-//         Self {
-//             measurement_id: self.measurement_id.clone(),
-//             data_type: self.data_type,
-//             mask: self.mask,
-//             offset_of_chunk_header: self.offset_of_chunk_header,
-//             statistics: cloned
-//         }
-//     }
-// }
 
 impl Display for ChunkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -94,8 +49,7 @@ pub struct ChunkWriter<T> {
     measurement_id: String,
     current_page_writer: Option<PageWriter<T>>,
     offset_of_chunk_header: Option<u64>,
-    // Statistics
-    statistics: StatisticsEnum,
+    statistics: Statistics,
 }
 
 impl Chunkeable for ChunkWriter<i32> {
@@ -108,9 +62,9 @@ impl Chunkeable for ChunkWriter<i32> {
         };
         // Update statistics
         match self.statistics {
-            StatisticsEnum::INT32(mut s) => {
+            Statistics::INT32(mut s) => {
                 s.update(timestamp, value);
-                self.statistics = StatisticsEnum::INT32(s);
+                self.statistics = Statistics::INT32(s);
             }
             _ => {
                 panic!("...")
@@ -213,9 +167,9 @@ impl Chunkeable for ChunkWriter<i64> {
         };
         // Update statistics
         match self.statistics {
-            StatisticsEnum::INT64(mut s) => {
+            Statistics::INT64(mut s) => {
                 s.update(timestamp, value);
-                self.statistics = StatisticsEnum::INT64(s);
+                self.statistics = Statistics::INT64(s);
             }
             _ => {
                 panic!("...")
@@ -318,9 +272,9 @@ impl Chunkeable for ChunkWriter<f32> {
         };
         // Update statistics
         match self.statistics {
-            StatisticsEnum::FLOAT(mut s) => {
+            Statistics::FLOAT(mut s) => {
                 s.update(timestamp, value);
-                self.statistics = StatisticsEnum::FLOAT(s);
+                self.statistics = Statistics::FLOAT(s);
             }
             _ => {
                 panic!("...")
@@ -427,7 +381,7 @@ impl<'a, 'b, T> ChunkWriter<T> {
             measurement_id: measurement_id.to_owned(),
             current_page_writer: None,
             offset_of_chunk_header: None,
-            statistics: StatisticsEnum::new(data_type),
+            statistics: Statistics::new(data_type),
         };
         Box::new(writer)
     }
