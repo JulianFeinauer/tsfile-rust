@@ -797,16 +797,7 @@ impl HashFunction {
 
         println!("Hash for ({s}, {seed}): {hash}");
 
-        match murmur3::murmur3_x86_128(&mut Cursor::new(s.clone()), seed as u32) {
-            Ok(hash) => {
-                let new_hash = (hash + (hash >> 64)) as i32;
-                println!("Hash: {new_hash}");
-                hash as i32
-            }
-            Err(_) => {
-                panic!("Whaaaaa!")
-            }
-        }
+        return hash;
     }
 
     fn hash(&self, value: &String) -> usize {
@@ -865,10 +856,10 @@ impl BloomFilter {
         error = error.max(MIN_BLOOM_FILTER_ERROR_RATE);
         error = error.min(MAX_BLOOM_FILTER_ERROR_RATE);
 
-        let ln2 = 2.0_f64.log2();
+        let ln2 = 2.0_f64.ln();
 
         let size = ((-1 * num_of_string) as f64 * error.ln() / ln2 / ln2) as i32 + 1 ;
-        let hash_function_size = (-1.0* error.ln() / ln2) as i32 + 1;
+        let hash_function_size = ((-1.0 * error.ln() / ln2) + 1.0) as i32;
 
         BloomFilter::new(
             size.max(MINIMAL_SIZE),
@@ -883,11 +874,18 @@ impl BloomFilter {
             (self.bit_set.len() + (self.bit_set.len() % 8)) / 8
         };
 
-        let mut result = vec![0 as u8; number_of_bytes];
+        let mut result = vec![0 as u8; (number_of_bytes - 1)];
+
+        println!("Result length: {}", &result.len());
 
         for i in 0..self.bit_set.len() {
             let byte_index = (i - (i%8))/8;
-            let bit_index = i%8;
+            let bit_index = i % 8;
+
+            // TODO why is this necessary?
+            if byte_index >= result.len() {
+                continue;
+            }
 
             let value = *result.get(byte_index).unwrap();
 
@@ -899,6 +897,12 @@ impl BloomFilter {
             };
             std::mem::replace(&mut result[byte_index], value | (bit << bit_index));
         }
+
+        for b in &result {
+            println!("{b}");
+        }
+
+        println!("Result: {}", &result.len());
 
         return result;
     }
@@ -913,10 +917,6 @@ impl Serializable for BloomFilter {
         file.write_all(bytes.as_slice());
         write_var_u32(self.size as u32, file);
         write_var_u32(self.hash_function_size as u32, file);
-
-        // // Fake approach
-        // let fake = [0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05];
-        // file.write_all(&fake);
 
         Ok(())
     }

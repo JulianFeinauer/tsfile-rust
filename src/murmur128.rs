@@ -1,3 +1,4 @@
+
 pub struct Murmur128 {}
 
 impl Murmur128 {
@@ -14,7 +15,7 @@ impl Murmur128 {
   }
 
   /** Methods to perform murmur 128 hash. */
-  fn getBlock(key: &[u8], offset: usize, index: i32) -> i64 {
+  fn get_block(key: &[u8], offset: usize, index: i32) -> i64 {
     let i8: usize = (index << 3) as usize;
     let block_offset: usize = (offset + i8) as usize;
     return (key[block_offset] as i64 & 0xff)
@@ -29,22 +30,25 @@ impl Murmur128 {
 
 
   fn rotl64(v: i64, n: i64) -> i64 {
-    return ((v << n) | (v >> (64 - n)));
-
+    let a = (64 - n);
+    let b = ((v as u64) >> a) as i64;
+    let c = (v << n);
+    let d = (c | b);
+    return d;
   }
 
   #[allow(overflowing_literals)]
   fn fmix(mut k: i64) -> i64 {
-    k ^= k >> 33;
-    k *= 0xff51afd7ed558ccd;
-    k ^= k >> 33;
-    k *= 0xc4ceb9fe1a85ec53;
-    k ^= k >> 33;
+    k ^= ((k as u64) >> 33) as i64;
+    k = ((k as i128) * 0xff51afd7ed558ccd) as i64;
+    k ^= ((k as u64) >> 33) as i64;
+    k = ((k as i128) * 0xc4ceb9fe1a85ec53) as i64;
+    k ^= ((k as u64) >> 33) as i64;
     return k;
   }
 
 
-  #[allow(overflowing_literals)]
+  #[allow(overflowing_literals,arithmetic_overflow)]
   fn inner_hash(key: &[u8], mut offset: usize, length: i32, seed: i64) -> i64 {
     let nblocks = length >> 4; // Process as 128-bit blocks.
     let mut h1 = seed;
@@ -54,8 +58,8 @@ impl Murmur128 {
     // ----------
     // body
     for i in 0..nblocks {
-      let mut k1 = Self::getBlock(key, offset, i * 2);
-      let mut k2 = Self::getBlock(key, offset, i * 2 + 1);
+      let mut k1 = Self::get_block(key, offset, i * 2);
+      let mut k2 = Self::get_block(key, offset, i * 2 + 1);
       k1 *= c1;
       k1 = Self::rotl64(k1, 31);
       k1 *= c2;
@@ -77,61 +81,66 @@ impl Murmur128 {
     offset += nblocks as usize * 16;
     let mut k1 = 0;
     let mut k2 = 0;
-    match (length & 15) {
-      15 => {
-        k2 ^= (key[offset + 14] as i64) << 48;
-      },
-      14 => {
-        k2 ^= (key[offset + 13] as i64) << 40;
-      },
-      13 => {
-        k2 ^= (key[offset + 12] as i64) << 32;
-      },
-      12 => {
-        k2 ^= (key[offset + 11] as i64) << 24;
-      },
-      11 => {
-        k2 ^= (key[offset + 10] as i64) << 16;
-      },
-      10 => {
-        k2 ^= (key[offset + 9] as i64) << 8;
-      },
-      9 => {
-        k2 ^= key[offset + 8] as i64;
-        k2 *= c2;
-        k2 = Self::rotl64(k2, 33);
-        k2 *= c1;
-        h2 ^= k2;
-      },
-      8 => {
-        k1 ^= (key[offset + 7] as i64) << 56;
-      },
-      7 => {
-        k1 ^= (key[offset + 6] as i64) << 48;
-      },
-      6 => {
-        k1 ^= (key[offset + 5] as i64) << 40;
-      },
-      5 => {
-        k1 ^= (key[offset + 4] as i64) << 32;
-      },
-      4 => {
-        k1 ^= (key[offset + 3] as i64) << 24;
-      },
-      3 => {
-        k1 ^= (key[offset + 2] as i64) << 16;
-      },
-      2 => {
-        k1 ^= (key[offset + 1] as i64) << 8;
-      },
-      1 => {
-        k1 ^= key[offset] as i64;
-        k1 *= c1;
-        k1 = Self::rotl64(k1, 31);
-        k1 *= c2;
-        h1 ^= k1;
+    let mut identifier = length & 15;
+    // Dirty trick to simulate fallthrough in java
+    while identifier > 0 {
+      match (identifier) {
+        15 => {
+          k2 ^= (key[offset + 14] as i64) << 48;
+        },
+        14 => {
+          k2 ^= (key[offset + 13] as i64) << 40;
+        },
+        13 => {
+          k2 ^= (key[offset + 12] as i64) << 32;
+        },
+        12 => {
+          k2 ^= (key[offset + 11] as i64) << 24;
+        },
+        11 => {
+          k2 ^= (key[offset + 10] as i64) << 16;
+        },
+        10 => {
+          k2 ^= (key[offset + 9] as i64) << 8;
+        },
+        9 => {
+          k2 ^= key[offset + 8] as i64;
+          k2 *= c2;
+          k2 = Self::rotl64(k2, 33);
+          k2 *= c1;
+          h2 ^= k2;
+        },
+        8 => {
+          k1 ^= (key[offset + 7] as i64) << 56;
+        },
+        7 => {
+          k1 ^= (key[offset + 6] as i64) << 48;
+        },
+        6 => {
+          k1 ^= (key[offset + 5] as i64) << 40;
+        },
+        5 => {
+          k1 ^= (key[offset + 4] as i64) << 32;
+        },
+        4 => {
+          k1 ^= (key[offset + 3] as i64) << 24;
+        },
+        3 => {
+          k1 ^= (key[offset + 2] as i64) << 16;
+        },
+        2 => {
+          k1 ^= (key[offset + 1] as i64) << 8;
+        },
+        1 => {
+          k1 ^= key[offset] as i64;
+          k1 = ((k1 as i128) * (c1 as i128)) as i64;
+          k1 = Self::rotl64(k1, 31);
+          k1 = ((k1 as i128) * (c2 as i128)) as i64;
+          h1 ^= k1;
+        }
+        _ => {}
       }
-      _ => {}
+      identifier -= 1
     }
     // ----------
     // finalization
@@ -141,8 +150,8 @@ impl Murmur128 {
     h2 += h1;
     h1 = Self::fmix(h1);
     h2 = Self::fmix(h2);
-    h1 += h2;
-    h2 += h1;
-    return h1 + h2;
+    h1 = ((h1 as i128) + (h2 as i128)) as i64;
+    h2 = ((h2 as i128) + (h1 as i128)) as i64;
+    return h1.overflowing_add(h2).0;
   }
 }
