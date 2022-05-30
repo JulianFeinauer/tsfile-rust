@@ -1279,6 +1279,7 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10, IoTDBValue::INT(14));
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 100, IoTDBValue::INT(15));
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1000, IoTDBValue::INT(16));
+    TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10000, IoTDBValue::INT(17));
 
     TsFileWriter::flush(&mut writer);
 
