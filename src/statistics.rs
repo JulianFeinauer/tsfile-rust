@@ -2,8 +2,7 @@ use std::io;
 use std::os::macos::raw::stat;
 use crate::{PositionedWrite, Serializable, write_var_u32};
 
-pub trait Statistics<T>: Serializable {
-}
+pub trait Statistics<T>: Serializable {}
 
 #[derive(Copy, Clone)]
 pub struct StatisticsStruct<T> {
@@ -95,7 +94,15 @@ macro_rules! implement_statistics {
         }
     }
 
-implement_statistics!(i32);
+
+#[macro_export]
+macro_rules! implement_int_statistics {
+    ( $type:ty ) => {
+        implement_statistics!($type);
+    }
+    }
+
+implement_int_statistics!(i32);
 implement_statistics!(i64);
 implement_statistics!(f32);
 implement_statistics!(f64);

@@ -11,6 +11,7 @@ use std::io::Write;
 use compression::CompressionType;
 use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
 use statistics::{Statistics, StatisticsStruct};
+use crate::MetadataIndexNodeType::LeafDevice;
 
 use crate::utils::write_var_u32;
 
@@ -81,8 +82,8 @@ impl TSDataType {
     }
 }
 
-struct MeasurementSchema<'a> {
-    measurement_id: &'a str,
+struct MeasurementSchema {
+    measurement_id: String,
     data_type: TSDataType,
     encoding: TSEncoding,
     compression: CompressionType,
@@ -99,9 +100,9 @@ impl Display for Path {
     }
 }
 
-impl MeasurementSchema<'_> {
+impl MeasurementSchema {
     fn new(
-        measurement_id: &str,
+        measurement_id: String,
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
@@ -115,12 +116,12 @@ impl MeasurementSchema<'_> {
     }
 }
 
-struct MeasurementGroup<'a> {
-    measurement_schemas: HashMap<&'a str, MeasurementSchema<'a>>,
+struct MeasurementGroup {
+    measurement_schemas: HashMap<String, MeasurementSchema>,
 }
 
-struct Schema<'a> {
-    measurement_groups: HashMap<&'a Path, MeasurementGroup<'a>>,
+struct Schema {
+    measurement_groups: HashMap<String, MeasurementGroup>,
 }
 
 struct PageWriter {
@@ -289,7 +290,7 @@ impl Chunkeable for ChunkWriter<i32> {
 
 impl<'a, 'b, T> ChunkWriter<T> {
     pub(crate) fn new(
-        measurement_id: &'a str,
+        measurement_id: String,
         data_type: TSDataType,
         compression: CompressionType,
         encoding: TSEncoding,
@@ -311,20 +312,20 @@ impl<'a, 'b, T> ChunkWriter<T> {
     }
 }
 
-struct GroupWriter<'a> {
-    path: &'a Path,
-    measurement_group: MeasurementGroup<'a>,
-    chunk_writers: HashMap<&'a str, Box<dyn Chunkeable>>,
+struct GroupWriter {
+    path: Path,
+    measurement_group: MeasurementGroup,
+    chunk_writers: HashMap<String, Box<dyn Chunkeable>>,
 }
 
-impl<'a> GroupWriter<'a> {
+impl GroupWriter {
     pub(crate) fn write(
         &mut self,
-        measurement_id: &'a str,
+        measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<(), &str> {
-        match &mut self.chunk_writers.get_mut(measurement_id) {
+        match &mut self.chunk_writers.get_mut(&measurement_id) {
             Some(chunk_writer) => {
                 chunk_writer.write(timestamp, value);
                 Ok(())
@@ -413,6 +414,37 @@ impl ChunkGroupMetadata {
 enum MetadataIndexNodeType {
     LeafMeasurement,
     InternalMeasurement,
+    LeafDevice,
+}
+
+impl Serializable for MetadataIndexNodeType {
+    //   /** INTERNAL_DEVICE */
+    //   INTERNAL_DEVICE((byte) 0),
+    //
+    //   /** LEAF_DEVICE */
+    //   LEAF_DEVICE((byte) 1),
+    //
+    //   /** INTERNAL_MEASUREMENT */
+    //   INTERNAL_MEASUREMENT((byte) 2),
+    //
+    //   /** INTERNAL_MEASUREMENT */
+    //   LEAF_MEASUREMENT((byte) 3);
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        let byte: u8 = match self {
+            MetadataIndexNodeType::LeafMeasurement => {
+                0x03
+            }
+            MetadataIndexNodeType::InternalMeasurement => {
+                0x02
+            }
+            LeafDevice => {
+                0x01
+            }
+        };
+        file.write(&[byte]);
+
+        Ok(())
+    }
 }
 
 struct TimeseriesMetadata {}
@@ -423,11 +455,47 @@ struct MetadataIndexEntry {
     offset: usize,
 }
 
+impl Serializable for MetadataIndexEntry {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        // int byteLen = 0;
+        // byteLen += ReadWriteIOUtils.writeVar(name, outputStream);
+        // byteLen += ReadWriteIOUtils.write(offset, outputStream);
+        // return byteLen;
+        write_str(file, self.name.as_str());
+        file.write(&self.offset.to_be_bytes());
+
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 struct MetadataIndexNode {
     children: Vec<MetadataIndexEntry>,
     end_offset: usize,
     node_type: MetadataIndexNodeType,
+}
+
+impl Serializable for MetadataIndexNode {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        // int byteLen = 0;
+        // byteLen += ReadWriteForEncodingUtils.writeUnsignedVarInt(children.size(), outputStream);
+        // for (MetadataIndexEntry metadataIndexEntry : children) {
+        //   byteLen += metadataIndexEntry.serializeTo(outputStream);
+        // }
+        // byteLen += ReadWriteIOUtils.write(endOffset, outputStream);
+        // byteLen += ReadWriteIOUtils.write(nodeType.serialize(), outputStream);
+        // return byteLen;
+        write_var_u32(self.children.len() as u32, file);
+
+        for metadata_index_entry in self.children.iter() {
+            metadata_index_entry.serialize(file);
+        }
+
+        file.write(&self.end_offset.to_be_bytes());
+        self.node_type.serialize(file);
+
+        Ok(())
+    }
 }
 
 impl MetadataIndexNode {
@@ -453,16 +521,75 @@ impl MetadataIndexNode {
 
     #[allow(unused_variables)]
     fn generate_root_node(
-        measurement_metadata_index_queue: &Vec<MetadataIndexNode>,
+        mut measurement_metadata_index_queue: Vec<MetadataIndexNode>,
         file: &mut dyn PositionedWrite,
         node_type: MetadataIndexNodeType,
     ) -> MetadataIndexNode {
+        // int queueSize = metadataIndexNodeQueue.size();
+        // MetadataIndexNode metadataIndexNode;
+        // MetadataIndexNode currentIndexNode = new MetadataIndexNode(type);
+        // while (queueSize != 1) {
+        //   for (int i = 0; i < queueSize; i++) {
+        //     metadataIndexNode = metadataIndexNodeQueue.poll();
+        //     // when constructing from internal node, each node is related to an entry
+        //     if (currentIndexNode.isFull()) {
+        //       addCurrentIndexNodeToQueue(currentIndexNode, metadataIndexNodeQueue, out);
+        //       currentIndexNode = new MetadataIndexNode(type);
+        //     }
+        //     currentIndexNode.addEntry(
+        //         new MetadataIndexEntry(metadataIndexNode.peek().getName(), out.getPosition()));
+        //     metadataIndexNode.serializeTo(out.wrapAsStream());
+        //   }
+        //   addCurrentIndexNodeToQueue(currentIndexNode, metadataIndexNodeQueue, out);
+        //   currentIndexNode = new MetadataIndexNode(type);
+        //   queueSize = metadataIndexNodeQueue.size();
+        // }
+        // return metadataIndexNodeQueue.poll();
         // TODO
-        MetadataIndexNode {
-            children: vec![],
-            end_offset: 0,
-            node_type,
+        let mut queue_size = measurement_metadata_index_queue.len();
+        let mut metadata_index_node;
+        let mut current_index_metadata = MetadataIndexNode::new(node_type.clone());
+
+        while queue_size != 1 {
+            for i in 0..queue_size {
+                metadata_index_node = measurement_metadata_index_queue.get(0).unwrap().clone();
+                let device = match metadata_index_node.children.get(0) {
+                    None => {
+                        panic!("...")
+                    }
+                    Some(inner) => {
+                        inner.name.clone()
+                    }
+                };
+                measurement_metadata_index_queue.remove(0);
+                if current_index_metadata.is_full() {
+                    current_index_metadata.end_offset = file.get_position() as usize;
+                    measurement_metadata_index_queue.push(current_index_metadata.clone());
+                }
+                // ...
+                let name = match metadata_index_node.children.get(0) {
+                    None => {
+                        panic!("This should not happen!")
+                    }
+                    Some(node) => {
+                        node.name.clone()
+                    }
+                };
+                current_index_metadata.children.push(MetadataIndexEntry {
+                    name: name,
+                    offset: file.get_position() as usize,
+                });
+            }
+            // ...
+            Self::add_current_index_node_to_queue(&mut current_index_metadata, &mut measurement_metadata_index_queue, file);
+            current_index_metadata = MetadataIndexNode {
+                children: vec![],
+                end_offset: 0,
+                node_type: node_type.clone(),
+            };
+            queue_size = measurement_metadata_index_queue.len();
         }
+        return measurement_metadata_index_queue.get(0).unwrap().clone();
     }
 
     #[allow(unused_variables)]
@@ -528,15 +655,32 @@ impl MetadataIndexNode {
             current_index_node.end_offset = file.get_position() as usize;
             measurement_metadata_index_queue.push(current_index_node.clone());
 
+            let root_node = Self::generate_root_node(
+                measurement_metadata_index_queue,
+                file,
+                MetadataIndexNodeType::InternalMeasurement,
+            );
             device_metadata_index_map.insert(
                 device.clone(),
-                Self::generate_root_node(
-                    &measurement_metadata_index_queue,
-                    file,
-                    MetadataIndexNodeType::InternalMeasurement,
-                ),
+                root_node,
             );
         }
+
+        if device_metadata_index_map.len() <= GET_MAX_DEGREE_OF_INDEX_NODE {
+            let mut metadata_index_node = MetadataIndexNode::new(LeafDevice);
+
+            for (s, value) in device_metadata_index_map {
+                metadata_index_node.children.push(MetadataIndexEntry {
+                    name: s.clone(),
+                    offset: file.get_position() as usize,
+                });
+                value.serialize(file);
+            }
+            metadata_index_node.end_offset = file.get_position() as usize;
+            return metadata_index_node;
+        }
+
+        panic!("This is not yet implemented!");
 
         // // if not exceed the max child nodes num, ignore the device index and directly point to the
         // // measurement
@@ -625,22 +769,71 @@ struct TimeSeriesMetadata<T> {
 //     }
 // }
 
-struct TsFileWriter<'a> {
-    filename: &'a str,
-    group_writers: HashMap<&'a Path, GroupWriter<'a>>,
+struct BloomFilter {}
+
+impl BloomFilter {
+    fn build(paths: Vec<Path>) -> BloomFilter {
+        BloomFilter {}
+    }
+}
+
+impl Serializable for BloomFilter {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        let fake = [0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05];
+        file.write_all(&fake);
+
+        Ok(())
+    }
+}
+
+struct TsFileMetadata {
+    metadata_index: Option<MetadataIndexNode>,
+    meta_offset: u64,
+}
+
+impl TsFileMetadata {
+    pub fn new(metadata_index: Option<MetadataIndexNode>, meta_offset: u64) -> TsFileMetadata {
+        TsFileMetadata {
+            metadata_index,
+            meta_offset,
+        }
+    }
+}
+
+impl Serializable for TsFileMetadata {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        match self.metadata_index.clone() {
+            Some(index) => {
+                index.serialize(file);
+            }
+            None => {
+                // Write 0 as 4 bytes (u32)
+                file.write_all(&(0x00 as u32).to_be_bytes());
+            }
+        }
+        // Meta Offset
+        file.write_all(&self.meta_offset.to_be_bytes());
+
+        Ok(())
+    }
+}
+
+struct TsFileWriter {
+    filename: String,
+    group_writers: HashMap<Path, GroupWriter>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
 }
 
-impl<'a> TsFileWriter<'a> {
+impl TsFileWriter {
     pub(crate) fn write<'b>(
         &'b mut self,
-        device: &'a Path,
-        measurement_id: &'a str,
+        device: Path,
+        measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<(), &'b str> {
-        match self.group_writers.get_mut(device) {
+        match self.group_writers.get_mut(&device) {
             Some(group) => {
                 return group.write(measurement_id, timestamp, value);
             }
@@ -748,52 +941,62 @@ impl<'a> TsFileWriter<'a> {
             }
         }
 
+        // Get meta offset
+        let meta_offset = file.get_position();
+
         // Write Marker 0x02
         file.write_all(&[0x02]);
 
         let metadata_index_node = self.flush_metadata_index(file, &chunk_metadata_map);
 
-        // TODO Write "real" statistics
-        let statistics = [
-            0x01, 0x04, 0x73, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x6B, 0x03, 0x01, 0x04, 0x64, 0x31, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x01,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x33, 0x1F, 0x04, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-            0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02,
-            0x05, 0x00, 0x00, 0x00,
-        ];
-        file.write_all(&statistics);
+        let ts_file_metadata = TsFileMetadata::new(Some(metadata_index_node), meta_offset);
+
+        let footer_index = file.get_position();
+
+        ts_file_metadata.serialize(file);
+
+        // Now serialize the Bloom Filter ?!
+
+        let paths = chunk_metadata_map.keys().into_iter().map(|path| { path.clone() }).collect();
+
+        let bloom_filter = BloomFilter::build(paths);
+
+        bloom_filter.serialize(file);
+
+
+        let size_of_footer = (file.get_position() - footer_index) as u32;
+
+        file.write_all(&size_of_footer.to_be_bytes());
 
         // Footer
-        file.write_all("@TsFile".as_bytes());
+        file.write_all("TsFile".as_bytes());
         Ok(())
     }
 
     pub(crate) fn flush(&mut self) -> Result<(), &str> {
-        let mut file = WriteWrapper::new(File::create(self.filename).expect("create failed"));
+        let mut file = WriteWrapper::new(File::create(self.filename.clone()).expect("create failed"));
         self._flush(&mut file)
     }
 }
 
-impl TsFileWriter<'_> {
-    fn new<'a>(filename: &'a str, schema: Schema<'a>) -> TsFileWriter<'a> {
+impl TsFileWriter {
+    fn new(filename: String, schema: Schema) -> TsFileWriter {
         let group_writers = schema
             .measurement_groups
             .into_iter()
             .map(|(path, v)| {
                 (
-                    path,
+                    Path { path: path.clone() },
                     GroupWriter {
-                        path,
+                        path: Path { path: path.clone() },
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
-                            .map(|(&measurement_id, measurement_schema)| {
+                            .map(|(measurement_id, measurement_schema)| {
                                 (
-                                    measurement_id,
+                                    measurement_id.clone(),
                                     ChunkWriter::<i32>::new(
-                                        measurement_id,
+                                        measurement_id.clone(),
                                         measurement_schema.data_type,
                                         measurement_schema.compression,
                                         measurement_schema.encoding,
@@ -915,14 +1118,14 @@ impl Serializable for ChunkHeader<'_> {
 #[warn(dead_code)]
 pub fn write_file_3() {
     let measurement_schema = MeasurementSchema {
-        measurement_id: "s1",
+        measurement_id: String::from("s1"),
         data_type: TSDataType::INT32,
         encoding: TSEncoding::PLAIN,
         compression: CompressionType::UNCOMPRESSED,
     };
 
     let mut measurement_schema_map = HashMap::new();
-    measurement_schema_map.insert("s1", measurement_schema);
+    measurement_schema_map.insert(String::from("s1"), measurement_schema);
     let measurement_group = MeasurementGroup {
         measurement_schemas: measurement_schema_map,
     };
@@ -930,15 +1133,15 @@ pub fn write_file_3() {
     let d1 = Path {
         path: "d1".to_owned(),
     };
-    measurement_groups_map.insert(&d1, measurement_group);
+    measurement_groups_map.insert(d1.path.clone(), measurement_group);
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
-    let mut writer = TsFileWriter::new("data3.tsfile", schema);
+    let mut writer = TsFileWriter::new(String::from("data3.tsfile"), schema);
 
-    TsFileWriter::write(&mut writer, &d1, "s1", 1, IoTDBValue::INT(13));
-    TsFileWriter::write(&mut writer, &d1, "s1", 10, IoTDBValue::INT(14));
-    TsFileWriter::write(&mut writer, &d1, "s1", 100, IoTDBValue::INT(15));
+    TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1, IoTDBValue::INT(13));
+    TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10, IoTDBValue::INT(14));
+    TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 100, IoTDBValue::INT(15));
 
     TsFileWriter::flush(&mut writer);
 
@@ -989,12 +1192,12 @@ fn write_file() {
     // Chunk Group Header
     file.write(&[4]).expect("write failed"); // lenght (?)
     file.write("d1".as_bytes()).expect("write failed"); // device id
-                                                        // First Chunk
-                                                        // Chunk Header
+    // First Chunk
+    // Chunk Header
     file.write(&[5]).expect("write failed"); // Marker
     file.write(&[4]).expect("write failed"); // lenght (?)
     file.write("s1".as_bytes()).expect("write failed"); // measurement id
-                                                        // Data Lenght
+    // Data Lenght
     file.write(&[28]).expect("write failed");
     // Data Type INT32 -> 1
     file.write(&[1]).expect("write failed");
@@ -1052,30 +1255,30 @@ mod tests {
         ];
 
         let measurement_schema = MeasurementSchema {
-            measurement_id: "s1",
+            measurement_id: String::from("s1"),
             data_type: TSDataType::INT32,
             encoding: TSEncoding::PLAIN,
             compression: CompressionType::UNCOMPRESSED,
         };
 
         let mut measurement_schema_map = HashMap::new();
-        measurement_schema_map.insert("s1", measurement_schema);
+        measurement_schema_map.insert(String::from("s1"), measurement_schema);
         let measurement_group = MeasurementGroup {
             measurement_schemas: measurement_schema_map,
         };
         let mut measurement_groups_map = HashMap::new();
         let d1 = Path {
-            path: "d1".to_owned(),
+            path: String::from("d1"),
         };
-        measurement_groups_map.insert(&d1, measurement_group);
+        measurement_groups_map.insert(d1.path.clone(), measurement_group);
         let schema = Schema {
             measurement_groups: measurement_groups_map,
         };
-        let mut writer = TsFileWriter::new("data3.tsfile", schema);
+        let mut writer = TsFileWriter::new("data3.tsfile".parse().unwrap(), schema);
 
-        TsFileWriter::write(&mut writer, &d1, "s1", 1, IoTDBValue::INT(13));
-        TsFileWriter::write(&mut writer, &d1, "s1", 10, IoTDBValue::INT(14));
-        TsFileWriter::write(&mut writer, &d1, "s1", 100, IoTDBValue::INT(15));
+        TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1, IoTDBValue::INT(13));
+        TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10, IoTDBValue::INT(14));
+        TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 100, IoTDBValue::INT(15));
 
         let buffer: Vec<u8> = vec![];
 
@@ -1083,8 +1286,8 @@ mod tests {
 
         writer._flush(&mut buffer_writer);
 
-        assert_eq!(buffer_writer.writer, expectation);
         assert_eq!(buffer_writer.position, 202);
+        assert_eq!(buffer_writer.writer, expectation);
     }
 
     #[test]
