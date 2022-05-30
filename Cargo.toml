@@ -11,3 +11,4 @@ edition = "2021"
 opt-level = "z"
 lto = true
 codegen-units = 1
+

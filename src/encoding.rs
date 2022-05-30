@@ -1,6 +1,6 @@
 use std::cmp::max;
 use std::io::Write;
-use crate::{Encoder, PositionedWrite, utils};
+use crate::{PositionedWrite, Serializable, utils};
 
 #[derive(Copy, Clone)]
 pub enum TSEncoding {
@@ -15,8 +15,13 @@ impl TSEncoding {
     }
 }
 
-pub struct PlainInt32Encoder {
-    values: Vec<i32>,
+pub trait Encoder<DataType> {
+    fn encode(&mut self, value: DataType);
+    fn serialize(&mut self, buffer: &mut Vec<u8>);
+}
+
+pub struct PlainIntEncoder<T> {
+    values: Vec<T>,
 }
 
 impl PositionedWrite for Vec<u8> {
@@ -25,8 +30,11 @@ impl PositionedWrite for Vec<u8> {
     }
 }
 
-impl PlainInt32Encoder {
-    pub(crate) fn serialize(&self, buffer: &mut Vec<u8>) {
+impl Encoder<i32> for PlainIntEncoder<i32> {
+    fn encode(&mut self, value: i32) {
+        self.values.push(value)
+    }
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
         for val in &self.values {
             // Do the encoding into writeVarInt
             utils::write_var_i32(*val, buffer);
@@ -34,17 +42,38 @@ impl PlainInt32Encoder {
     }
 }
 
-impl PlainInt32Encoder {
-    pub(crate) fn new() -> PlainInt32Encoder {
-        PlainInt32Encoder {
-            values: vec![]
+
+impl Encoder<i64> for PlainIntEncoder<i64> {
+    fn encode(&mut self, value: i64) {
+        self.values.push(value)
+    }
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
+        for val in &self.values {
+            // FIXME implement this
+            // utils::write_var_i32(*val, buffer);
+            panic!("Not implemented yet!")
         }
     }
 }
 
-impl Encoder<i32> for PlainInt32Encoder {
-    fn encode(&mut self, value: i32) {
+impl Encoder<f32> for PlainIntEncoder<f32> {
+    fn encode(&mut self, value: f32) {
         self.values.push(value)
+    }
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
+        for val in &self.values {
+            // FIXME implement this
+            // utils::write_var_i32(*val, buffer);
+            panic!("Not implemented yet!")
+        }
+    }
+}
+
+impl<T> PlainIntEncoder<T> {
+    pub(crate) fn new() -> PlainIntEncoder<T> {
+        Self {
+            values: vec![]
+        }
     }
 }
 
@@ -117,8 +146,43 @@ impl TimeEncoder {
         }
     }
 
+}
+
+
+impl TimeEncoder {
+    pub(crate) fn new() -> TimeEncoder {
+        TimeEncoder {
+            first_value: None,
+            min_delta: i64::MAX,
+            previous_value: i64::MAX,
+            values: vec![],
+        }
+    }
+}
+
+impl Encoder<i64> for TimeEncoder {
+    fn encode(&mut self, value: i64) {
+        match self.first_value {
+            None => {
+                self.first_value = Some(value);
+                self.previous_value = value;
+            }
+            Some(_) => {
+                // calc delta
+                let delta = value - self.previous_value;
+                // If delta is min, store it
+                if delta < self.min_delta {
+                    self.min_delta = delta;
+                }
+                // store delta
+                self.values.push(delta);
+                self.previous_value = value;
+            }
+        }
+    }
+
     #[allow(unused_variables)]
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
         // Preliminary calculations
         let mut delta_block_buffer: Vec<i64> = vec![];
 
@@ -160,39 +224,6 @@ impl TimeEncoder {
         // for val in &self.values {
         //     buffer.write(&val.to_be_bytes());
         // }
-    }
-}
-
-impl TimeEncoder {
-    pub(crate) fn new() -> TimeEncoder {
-        TimeEncoder {
-            first_value: None,
-            min_delta: i64::MAX,
-            previous_value: i64::MAX,
-            values: vec![],
-        }
-    }
-}
-
-impl Encoder<i64> for TimeEncoder {
-    fn encode(&mut self, value: i64) {
-        match self.first_value {
-            None => {
-                self.first_value = Some(value);
-                self.previous_value = value;
-            }
-            Some(_) => {
-                // calc delta
-                let delta = value - self.previous_value;
-                // If delta is min, store it
-                if delta < self.min_delta {
-                    self.min_delta = delta;
-                }
-                // store delta
-                self.values.push(delta);
-                self.previous_value = value;
-            }
-        }
     }
 }
 

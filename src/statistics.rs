@@ -1,8 +1,11 @@
+use std::any::Any;
 use std::io;
 
 use crate::{PositionedWrite, Serializable, write_var_u32};
 
-pub trait Statistics<T>: Serializable {}
+pub trait Statistics: Serializable {
+    fn as_any(&self) -> &dyn Any;
+}
 
 #[derive(Copy, Clone)]
 pub struct StatisticsStruct<T> {
@@ -90,7 +93,11 @@ macro_rules! implement_statistics {
                 }
             }
 
-            impl Statistics<$type> for StatisticsStruct<$type> {}
+            impl Statistics for StatisticsStruct<$type> {
+                fn as_any(&self) -> &dyn Any {
+                    self
+                }
+            }
         }
     }
 
@@ -104,6 +111,6 @@ macro_rules! implement_int_statistics {
 
 implement_int_statistics!(i32);
 implement_statistics!(i64);
+implement_statistics!(f32);
 // TODO Implement / use
-// implement_statistics!(f32);
 // implement_statistics!(f64);

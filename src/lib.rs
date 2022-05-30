@@ -6,11 +6,14 @@ use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 
 use compression::CompressionType;
-use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
+use encoding::{TimeEncoder, TSEncoding};
 use statistics::{Statistics, StatisticsStruct};
 use crate::chunk_writer::{Chunkeable, ChunkMetadata, ChunkWriter};
+use crate::encoding::Encoder;
 
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
@@ -85,12 +88,16 @@ impl<T: Write> WriteWrapper<T> {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum TSDataType {
     INT32,
+    INT64,
+    FLOAT,
 }
 
 impl TSDataType {
     fn serialize(&self) -> u8 {
         match self {
             TSDataType::INT32 => 1,
+            TSDataType::INT64 => 2,
+            TSDataType::FLOAT => 3,
         }
     }
 }
@@ -136,15 +143,16 @@ pub struct Schema {
     measurement_groups: HashMap<String, MeasurementGroup>,
 }
 
-struct PageWriter {
+struct PageWriter<T> {
     time_encoder: TimeEncoder,
-    value_encoder: PlainInt32Encoder,
+    value_encoder: Box<dyn Encoder<T>>,
     // Necessary for writing
     buffer: Vec<u8>,
+    phantom: PhantomData<T>
 }
 
 
-impl PageWriter {
+impl<T> PageWriter<T> {
     // TODO why is this never called?
     #[allow(dead_code)]
     pub(crate) fn serialize(&self, file: &mut File, compression: CompressionType) {
@@ -164,16 +172,17 @@ impl PageWriter {
     }
 }
 
-impl PageWriter {
-    fn new() -> PageWriter {
+impl<T> PageWriter<T> {
+    fn new<E: Encoder<T> + 'static>(encoder: E) -> PageWriter<T> {
         PageWriter {
             time_encoder: TimeEncoder::new(),
-            value_encoder: PlainInt32Encoder::new(),
+            value_encoder: Box::new(encoder),
             buffer: vec![],
+            phantom: PhantomData::default()
         }
     }
 
-    pub(crate) fn write(&mut self, timestamp: i64, value: i32) -> Result<(), &str> {
+    pub(crate) fn write(&mut self, timestamp: i64, value: T) -> Result<(), &str> {
         self.time_encoder.encode(timestamp);
         self.value_encoder.encode(value);
         Ok(())
@@ -464,7 +473,7 @@ impl MetadataIndexNode {
                     }
                     current_index_node.children.push(MetadataIndexEntry {
                         name: timeseries_metadata.get_measurement_id(),
-                        offset: file.get_position() as usize
+                        offset: file.get_position() as usize,
                     });
                 }
                 timeseries_metadata.serialize(file);
@@ -546,7 +555,7 @@ trait TimeSeriesMetadatable {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()>;
 }
 
-impl<T> TimeSeriesMetadatable for TimeSeriesMetadata<T> {
+impl TimeSeriesMetadatable for TimeSeriesMetadata {
     fn get_measurement_id(&self) -> String {
         self.measurement_id.clone()
     }
@@ -563,12 +572,12 @@ impl<T> TimeSeriesMetadatable for TimeSeriesMetadata<T> {
 }
 
 
-struct TimeSeriesMetadata<T> {
+struct TimeSeriesMetadata {
     time_series_metadata_type: u8,
     chunk_meta_data_list_data_size: usize,
     measurement_id: String,
     data_type: TSDataType,
-    statistics: Box<dyn Statistics<T>>,
+    statistics: Box<dyn Statistics>,
     buffer: Vec<u8>,
 }
 //
@@ -593,7 +602,7 @@ impl HashFunction {
     fn new(cap: i32, seed: i32) -> HashFunction {
         HashFunction {
             cap,
-            seed
+            seed,
         }
     }
 
@@ -611,11 +620,10 @@ struct BloomFilter {
     size: i32,
     hash_function_size: i32,
     func: Vec<HashFunction>,
-    bit_set: Vec<bool>
+    bit_set: Vec<bool>,
 }
 
 impl BloomFilter {
-
     fn add(&mut self, path: String) {
         for f in self.func.iter() {
             let bit_id = f.hash(&path);
@@ -625,7 +633,6 @@ impl BloomFilter {
     }
 
     fn new(size: i32, hash_function_size: i32) -> BloomFilter {
-
         let mut func = vec![];
 
         for i in 0..hash_function_size {
@@ -638,7 +645,7 @@ impl BloomFilter {
             size,
             hash_function_size,
             func,
-            bit_set
+            bit_set,
         }
     }
 
@@ -659,12 +666,12 @@ impl BloomFilter {
 
         let ln2 = 2.0_f64.ln();
 
-        let size = ((-1 * num_of_string) as f64 * error.ln() / ln2 / ln2) as i32 + 1 ;
+        let size = ((-1 * num_of_string) as f64 * error.ln() / ln2 / ln2) as i32 + 1;
         let hash_function_size = ((-1.0 * error.ln() / ln2) + 1.0) as i32;
 
         BloomFilter::new(
             size.max(MINIMAL_SIZE),
-            hash_function_size.min(MAXIMAL_HASH_FUNCTION_SIZE)
+            hash_function_size.min(MAXIMAL_HASH_FUNCTION_SIZE),
         )
     }
 
@@ -678,7 +685,7 @@ impl BloomFilter {
         let mut result = vec![0 as u8; number_of_bytes];
 
         for i in 0..self.bit_set.len() {
-            let byte_index = (i - (i%8))/8;
+            let byte_index = (i - (i % 8)) / 8;
             let bit_index = i % 8;
 
             // println!("{} - {} / {} -> {}", i, byte_index, bit_index, self.bit_set[i]);
@@ -786,7 +793,17 @@ impl TsFileWriter {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
-            let mut statistics: StatisticsStruct<i32> = StatisticsStruct::<i32>::new();
+            let mut statistics: Box<dyn Statistics> = match data_type {
+                TSDataType::INT32 => {
+                    Box::new(StatisticsStruct::<i32>::new())
+                }
+                TSDataType::INT64 => {
+                    Box::new(StatisticsStruct::<i64>::new())
+                }
+                TSDataType::FLOAT => {
+                    Box::new(StatisticsStruct::<i64>::new())
+                }
+            };
 
             let mut buffer: Vec<u8> = vec![];
 
@@ -796,7 +813,32 @@ impl TsFileWriter {
                 }
                 // Serialize
                 m.serialize(&mut buffer, serialize_statistic);
-                statistics.merge(&m.statistics);
+
+                let statistic = &m.statistics;
+                // Update the statistics
+                match data_type {
+                    TSDataType::INT32 => {
+                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<i32>>().unwrap();
+                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<i32>>().unwrap();
+                        let mut cloned = s1.clone();
+                        cloned.merge(stat);
+                        statistics = Box::new(cloned);
+                    }
+                    TSDataType::INT64 => {
+                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<i64>>().unwrap();
+                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<i64>>().unwrap();
+                        let mut cloned = s1.clone();
+                        cloned.merge(stat);
+                        statistics = Box::new(cloned);
+                    }
+                    TSDataType::FLOAT => {
+                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<f32>>().unwrap();
+                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<f32>>().unwrap();
+                        let mut cloned = s1.clone();
+                        cloned.merge(stat);
+                        statistics = Box::new(cloned);
+                    }
+                }
             }
 
             // Build Timeseries Index
@@ -808,7 +850,7 @@ impl TsFileWriter {
                 chunk_meta_data_list_data_size: buffer.len(),
                 measurement_id: metadata.get(0).unwrap().measurement_id.to_owned(),
                 data_type,
-                statistics: Box::new(statistics),
+                statistics: statistics,
                 buffer,
             };
 
@@ -951,10 +993,6 @@ impl TsFileWriter {
             timeseries_metadata_map: HashMap::new(),
         }
     }
-}
-
-trait Encoder<DataType> {
-    fn encode(&mut self, value: DataType);
 }
 
 struct ChunkGroupHeader<'a> {
@@ -1210,7 +1248,7 @@ mod tests {
             .add("d1", DeviceBuilder::new()
                 .add("s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .add("s2", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
-                .build()
+                .build(),
             )
             .build();
 
@@ -1230,8 +1268,7 @@ mod tests {
     fn write_i64() {
         let schema = TsFileSchemaBuilder::new()
             .add("d1", DeviceBuilder::new()
-                .add("s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
-                .add("s2", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
+                .add("s1", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .build()
             )
             .build();
@@ -1239,7 +1276,31 @@ mod tests {
         let mut writer = TsFileWriter::new("write_long.tsfile", schema);
 
         let result = writer.write("d1", "s1", 0, IoTDBValue::LONG(0));
-        let result = writer.write("d1", "s1", 0, IoTDBValue::LONG(0));
+
+        match result {
+            Ok(_) => {}
+            Err(_) => {
+                assert!(false);
+            }
+        }
+
+        writer.flush();
+
+        ()
+    }
+
+    #[test]
+    fn write_float() {
+        let schema = TsFileSchemaBuilder::new()
+            .add("d1", DeviceBuilder::new()
+                .add("s1", TSDataType::FLOAT, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
+                .build()
+            )
+            .build();
+
+        let mut writer = TsFileWriter::new("write_float.tsfile", schema);
+
+        let result = writer.write("d1", "s1", 0, IoTDBValue::FLOAT(3.141));
 
         match result {
             Ok(_) => {}
