@@ -103,7 +103,7 @@ macro_rules! implement_int_statistics {
     }
 
 implement_int_statistics!(i32);
+implement_statistics!(i64);
 // TODO Implement / use
-// implement_statistics!(i64);
 // implement_statistics!(f32);
 // implement_statistics!(f64);
