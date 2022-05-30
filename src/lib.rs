@@ -13,6 +13,7 @@ use compression::CompressionType;
 use encoding::{PlainInt32Encoder, TimeEncoder, TSEncoding};
 use statistics::{Statistics, StatisticsStruct};
 use crate::MetadataIndexNodeType::LeafDevice;
+use crate::murmur128::Murmur128;
 
 use crate::utils::write_var_u32;
 
@@ -21,6 +22,7 @@ mod encoding;
 mod statistics;
 mod test;
 mod utils;
+mod murmur128;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
@@ -791,8 +793,14 @@ impl HashFunction {
     }
 
     fn _murmur_hash(&self, s: &String, seed: i32) -> i32 {
-        match murmur3::murmur3_x64_128(&mut Cursor::new(s.clone()), seed as u32) {
+        let hash = Murmur128::hash(s, seed);
+
+        println!("Hash for ({s}, {seed}): {hash}");
+
+        match murmur3::murmur3_x86_128(&mut Cursor::new(s.clone()), seed as u32) {
             Ok(hash) => {
+                let new_hash = (hash + (hash >> 64)) as i32;
+                println!("Hash: {new_hash}");
                 hash as i32
             }
             Err(_) => {
@@ -818,7 +826,9 @@ impl BloomFilter {
 
     fn add(&mut self, path: String) {
         for f in self.func.iter() {
-            self.bit_set[f.hash(&path)] = true;
+            let hash_value = f.hash(&path);
+            println!("Hash for {path}: {hash_value}");
+            self.bit_set[hash_value] = true;
         }
     }
 
@@ -897,16 +907,16 @@ impl BloomFilter {
 impl Serializable for BloomFilter {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
         // Real
-        // let bytes = self.serialize_bits();
-        //
-        // write_var_u32(bytes.len() as u32, file);
-        // file.write_all(bytes.as_slice());
-        // write_var_u32(self.size as u32, file);
-        // write_var_u32(self.hash_function_size as u32, file);
+        let bytes = self.serialize_bits();
 
-        // Fake approach
-        let fake = [0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05];
-        file.write_all(&fake);
+        write_var_u32(bytes.len() as u32, file);
+        file.write_all(bytes.as_slice());
+        write_var_u32(self.size as u32, file);
+        write_var_u32(self.hash_function_size as u32, file);
+
+        // // Fake approach
+        // let fake = [0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05];
+        // file.write_all(&fake);
 
         Ok(())
     }
@@ -1268,6 +1278,7 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1, IoTDBValue::INT(13));
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10, IoTDBValue::INT(14));
     TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 100, IoTDBValue::INT(15));
+    TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1000, IoTDBValue::INT(16));
 
     TsFileWriter::flush(&mut writer);
 
