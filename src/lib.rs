@@ -21,6 +21,7 @@ mod statistics;
 mod test;
 mod utils;
 mod murmur128;
+mod schema;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
@@ -79,7 +80,7 @@ impl<T: Write> WriteWrapper<T> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-enum TSDataType {
+pub enum TSDataType {
     INT32,
 }
 
@@ -91,6 +92,7 @@ impl TSDataType {
     }
 }
 
+#[derive(Clone)]
 struct MeasurementSchema {
     data_type: TSDataType,
     encoding: TSEncoding,
@@ -122,11 +124,12 @@ impl MeasurementSchema {
     }
 }
 
-struct MeasurementGroup {
+#[derive(Clone)]
+pub struct MeasurementGroup {
     measurement_schemas: HashMap<String, MeasurementSchema>,
 }
 
-struct Schema {
+pub struct Schema {
     measurement_groups: HashMap<String, MeasurementGroup>,
 }
 
@@ -953,13 +956,13 @@ struct TsFileWriter {
 }
 
 impl TsFileWriter {
-    pub(crate) fn write<'b>(
-        &'b mut self,
+    pub(crate) fn write(
+        &mut self,
         device: Path,
         measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
-    ) -> Result<(), &'b str> {
+    ) -> Result<(), &str> {
         match self.group_writers.get_mut(&device) {
             Some(group) => {
                 return group.write(measurement_id, timestamp, value);
@@ -1322,6 +1325,7 @@ mod tests {
     use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
     use crate::encoding::TSEncoding;
+    use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
     use crate::utils::{read_var_u32, write_var_u32};
 
     #[test]
@@ -1379,7 +1383,7 @@ mod tests {
         let schema = Schema {
             measurement_groups: measurement_groups_map,
         };
-        let mut writer = TsFileWriter::new("data3.tsfile".parse().unwrap(), schema);
+        let mut writer = TsFileWriter::new(String::from("data3.tsfile"), schema);
 
         TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 1, IoTDBValue::INT(13));
         TsFileWriter::write(&mut writer, d1.clone(), String::from("s1"), 10, IoTDBValue::INT(14));
