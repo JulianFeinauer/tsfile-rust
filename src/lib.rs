@@ -17,6 +17,7 @@ use crate::encoding::Encoder;
 
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
+use crate::statistics::StatisticsEnum;
 use crate::utils::write_var_u32;
 
 mod compression;
@@ -577,7 +578,7 @@ struct TimeSeriesMetadata {
     chunk_meta_data_list_data_size: usize,
     measurement_id: String,
     data_type: TSDataType,
-    statistics: Box<dyn Statistics>,
+    statistics: StatisticsEnum,
     buffer: Vec<u8>,
 }
 //
@@ -793,18 +794,7 @@ impl TsFileWriter {
         for (path, metadata) in chunk_metadata_list {
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
-            let mut statistics: Box<dyn Statistics> = match data_type {
-                TSDataType::INT32 => {
-                    Box::new(StatisticsStruct::<i32>::new())
-                }
-                TSDataType::INT64 => {
-                    Box::new(StatisticsStruct::<i64>::new())
-                }
-                TSDataType::FLOAT => {
-                    Box::new(StatisticsStruct::<i64>::new())
-                }
-            };
-
+            let mut statistics = StatisticsEnum::new(data_type);
             let mut buffer: Vec<u8> = vec![];
 
             for m in metadata {
@@ -816,29 +806,7 @@ impl TsFileWriter {
 
                 let statistic = &m.statistics;
                 // Update the statistics
-                match data_type {
-                    TSDataType::INT32 => {
-                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<i32>>().unwrap();
-                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<i32>>().unwrap();
-                        let mut cloned = s1.clone();
-                        cloned.merge(stat);
-                        statistics = Box::new(cloned);
-                    }
-                    TSDataType::INT64 => {
-                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<i64>>().unwrap();
-                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<i64>>().unwrap();
-                        let mut cloned = s1.clone();
-                        cloned.merge(stat);
-                        statistics = Box::new(cloned);
-                    }
-                    TSDataType::FLOAT => {
-                        let s1 = statistics.deref().as_any().downcast_ref::<StatisticsStruct<f32>>().unwrap();
-                        let stat = &statistic.as_any().downcast_ref::<StatisticsStruct<f32>>().unwrap();
-                        let mut cloned = s1.clone();
-                        cloned.merge(stat);
-                        statistics = Box::new(cloned);
-                    }
-                }
+                statistics.merge(statistic);
             }
 
             // Build Timeseries Index

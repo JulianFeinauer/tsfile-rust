@@ -1,7 +1,83 @@
 use std::any::Any;
 use std::io;
 
-use crate::{PositionedWrite, Serializable, write_var_u32};
+use crate::{PositionedWrite, Serializable, TSDataType, write_var_u32};
+
+#[derive(Clone)]
+pub enum StatisticsEnum {
+    INT32(StatisticsStruct<i32>),
+    INT64(StatisticsStruct<i64>),
+    FLOAT(StatisticsStruct<f32>),
+}
+
+impl StatisticsEnum {
+    pub(crate) fn merge(&mut self, other: &StatisticsEnum) {
+        match self {
+            StatisticsEnum::INT32(s) => {
+                match other {
+                    StatisticsEnum::INT32(othr) => {
+                        s.merge(othr)
+                    }
+                    _ => {
+                        panic!("...")
+                    }
+                }
+            }
+            StatisticsEnum::INT64(s) => {
+                match other {
+                    StatisticsEnum::INT64(othr) => {
+                        s.merge(othr)
+                    }
+                    _ => {
+                        panic!("...")
+                    }
+                }
+            }
+            StatisticsEnum::FLOAT(s) => {
+                match other {
+                    StatisticsEnum::FLOAT(othr) => {
+                        s.merge(othr)
+                    }
+                    _ => {
+                        panic!("...")
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl StatisticsEnum {
+    pub fn new(data_type: TSDataType) -> StatisticsEnum {
+        match data_type {
+            TSDataType::INT32 => {
+                StatisticsEnum::INT32(StatisticsStruct::<i32>::new())
+            }
+            TSDataType::INT64 => {
+                StatisticsEnum::INT64(StatisticsStruct::<i64>::new())
+            }
+            TSDataType::FLOAT => {
+                StatisticsEnum::FLOAT(StatisticsStruct::<f32>::new())
+            }
+        }
+    }
+}
+
+impl Serializable for StatisticsEnum {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+        match self {
+            StatisticsEnum::INT32(s) => {
+                s.serialize(file)
+            }
+            StatisticsEnum::INT64(s) => {
+                s.serialize(file)
+            }
+            StatisticsEnum::FLOAT(s) => {
+                s.serialize(file)
+            }
+        }
+    }
+}
 
 pub trait Statistics: Serializable {
     fn as_any(&self) -> &dyn Any;
