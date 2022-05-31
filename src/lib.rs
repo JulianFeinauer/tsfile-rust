@@ -1130,6 +1130,7 @@ fn write_file() {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
@@ -1210,19 +1211,22 @@ mod tests {
 
     #[test]
     fn write_file_5() {
+        let device = "root.sg.d1";
         let schema = TsFileSchemaBuilder::new()
-            .add("d1", DeviceBuilder::new()
+            .add(device, DeviceBuilder::new()
                 .add("s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .add("s2", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .build(),
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data5.tsfile", schema);
+        let epoch_time_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+
+        let mut writer = TsFileWriter::new(format!("{}-1-0-0.tsfile", epoch_time_ms).as_str(), schema);
 
         for i in 0..100 {
-            writer.write("d1", "s1", i, IoTDBValue::INT(i as i32));
-            writer.write("d1", "s2", i, IoTDBValue::INT(i as i32));
+            writer.write(device, "s1", i, IoTDBValue::INT(i as i32));
+            writer.write(device, "s2", i, IoTDBValue::INT(i as i32));
         }
 
         writer.flush();
