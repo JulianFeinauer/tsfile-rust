@@ -4,7 +4,7 @@ pub enum CompressionType {
 }
 
 impl CompressionType {
-    pub(crate) fn serialize(&self) -> u8 {
+    pub fn serialize(&self) -> u8 {
         match self {
             CompressionType::UNCOMPRESSED => 0
         }
