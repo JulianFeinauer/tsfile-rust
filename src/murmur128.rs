@@ -101,9 +101,9 @@ impl Murmur128 {
         },
         9 => {
           k2 ^= key[offset + 8] as i64;
-          k2 *= c2;
+          k2 = ((k2 as i128) * (c2 as i128)) as i64;
           k2 = Self::rotl64(k2, 33);
-          k2 *= c1;
+          k2 = ((k2 as i128) * (c1 as i128)) as i64;
           h2 ^= k2;
         },
         8 => {

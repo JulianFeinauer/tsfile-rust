@@ -16,10 +16,10 @@ use crate::encoding::Encoder;
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
 use crate::statistics::Statistics;
-use crate::utils::write_var_u32;
+use crate::utils::{write_var_i32, write_var_u32};
 
-mod compression;
-mod encoding;
+pub mod compression;
+pub mod encoding;
 mod statistics;
 mod test;
 mod utils;
@@ -92,7 +92,7 @@ pub enum TSDataType {
 }
 
 impl TSDataType {
-    fn serialize(&self) -> u8 {
+    pub fn serialize(&self) -> u8 {
         match self {
             TSDataType::INT32 => 1,
             TSDataType::INT64 => 2,
@@ -310,6 +310,7 @@ impl Serializable for MetadataIndexEntry {
         // return byteLen;
         write_str(file, self.name.as_str());
         file.write(&self.offset.to_be_bytes());
+        // file.write(&(self.offset as i64).to_be_bytes());
 
         Ok(())
     }
@@ -822,15 +823,21 @@ impl TsFileWriter {
 
             // Add to the global struct
             let split = path.path.split(".").collect::<Vec<&str>>();
-            let device_id = *split.get(0).unwrap();
+            let mut device_id = "".to_owned();
+            for i in 0..split.len() - 1 {
+                if i > 0 {
+                    device_id.push_str(".");
+                }
+                device_id.push_str(*split.get(i).unwrap());
+            }
 
-            if !self.timeseries_metadata_map.contains_key(device_id) {
+            if !self.timeseries_metadata_map.contains_key(&device_id) {
                 self.timeseries_metadata_map
                     .insert(device_id.to_owned(), vec![]);
             }
 
             self.timeseries_metadata_map
-                .get_mut(device_id)
+                .get_mut(&device_id)
                 .unwrap()
                 .push(Box::new(timeseries_metadata));
         }
@@ -1012,8 +1019,8 @@ impl Serializable for Chunk<'_> {
 }
 
 fn write_str(file: &mut dyn PositionedWrite, s: &str) -> io::Result<()> {
-    let len = s.len() as u8 + 2;
-    file.write(&[len]).expect("write failed"); // lenght (?)
+    let len = s.len() as i32;
+    write_var_i32(len, file);
     let bytes = s.as_bytes();
     file.write(bytes); // measurement id
     Ok(())
@@ -1130,6 +1137,7 @@ fn write_file() {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
@@ -1210,19 +1218,22 @@ mod tests {
 
     #[test]
     fn write_file_5() {
+        let device = "root.sg.d1";
         let schema = TsFileSchemaBuilder::new()
-            .add("d1", DeviceBuilder::new()
+            .add(device, DeviceBuilder::new()
                 .add("s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .add("s2", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
                 .build(),
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data5.tsfile", schema);
+        let epoch_time_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+
+        let mut writer = TsFileWriter::new(format!("{}-1-0-0.tsfile", epoch_time_ms).as_str(), schema);
 
         for i in 0..100 {
-            writer.write("d1", "s1", i, IoTDBValue::INT(i as i32));
-            writer.write("d1", "s2", i, IoTDBValue::INT(i as i32));
+            writer.write(device, "s1", i, IoTDBValue::INT(i as i32));
+            writer.write(device, "s2", i, IoTDBValue::INT(i as i32));
         }
 
         writer.flush();

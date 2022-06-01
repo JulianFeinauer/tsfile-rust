@@ -8,7 +8,7 @@ pub enum TSEncoding {
 }
 
 impl TSEncoding {
-    pub(crate) fn serialize(&self) -> u8 {
+    pub fn serialize(&self) -> u8 {
         match self {
             TSEncoding::PLAIN => 0
         }
