@@ -13,3 +13,4 @@ md5 = "0.7.0"
 sha2 = "0.10.2"
 hex = "0.4.3"
 tsfile-rust = { path = "../" }
+crc32fast = "1.3.2"
