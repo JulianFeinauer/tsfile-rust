@@ -86,7 +86,7 @@ fn run() -> thrift::Result<()> {
 
     // let version = std::string::String::from("UNKNOWN");
     let version = std::string::String::from("0.13");
-    let confirm = ConfirmInfo::new(ip, Some(uuid), Some(PARTITION_INTERVAL), Some(version));
+    let confirmx = ConfirmInfo::new(ip, Some(uuid), Some(PARTITION_INTERVAL), Some(version));
 
     let result = client.check(confirm);
 
