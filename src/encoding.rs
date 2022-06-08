@@ -78,6 +78,7 @@ pub struct TimeEncoder {
     min_delta: i64,
     previous_value: i64,
     values: Vec<i64>,
+    buffer: Vec<u8>
 }
 
 impl TimeEncoder {
@@ -152,7 +153,55 @@ impl TimeEncoder {
             min_delta: i64::MAX,
             previous_value: i64::MAX,
             values: vec![],
+            buffer: vec![]
         }
+    }
+
+    fn flush(&mut self) {
+        if self.values.is_empty() {
+            return;
+        }
+        // Preliminary calculations
+        let mut delta_block_buffer: Vec<i64> = vec![];
+
+        for delta in &self.values {
+            delta_block_buffer.push(delta - self.min_delta);
+        }
+
+        let write_width = self.calculate_bit_widths_for_delta_block_buffer(&delta_block_buffer);
+
+        // Write Header
+        // Write number of entries
+        let number_of_entries: u32 = self.values.len() as u32;
+        self.buffer.write_all(&number_of_entries.to_be_bytes());
+        // Write "write-width"
+        self.buffer.write_all(&write_width.to_be_bytes());
+
+        // Min Delta Base
+        self.buffer.write_all(&self.min_delta.to_be_bytes());
+        // First Value
+        self.buffer.write_all(&self.first_value.expect("").to_be_bytes());
+        // End Header
+
+        // FIXME continue here...
+        // now we can drop the long-to-bytes values here
+        let mut payload_buffer = vec![];
+        for i in 0..delta_block_buffer.len() {
+            Self::long_to_bytes(delta_block_buffer[i], &mut payload_buffer, (i * write_width as usize) as usize, write_width);
+        }
+
+        let a = (delta_block_buffer.len() * write_width as usize) as f64;
+        let b = a / 8.0;
+        let encoding_length = b.ceil() as usize;
+
+        // Copy over to "real" buffer
+        self.buffer.write_all(payload_buffer.as_slice());
+
+        // Now reset everything
+        self.values.clear();
+        self.first_value = None;
+        self.previous_value = 0;
+        self.min_delta = i64::MAX;
     }
 }
 
@@ -175,51 +224,17 @@ impl Encoder<i64> for TimeEncoder {
                 self.previous_value = value;
             }
         }
+        if self.values.len() == 128 {
+            self.flush();
+        }
     }
 
     #[allow(unused_variables)]
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        // Preliminary calculations
-        let mut delta_block_buffer: Vec<i64> = vec![];
-
-        for delta in &self.values {
-            delta_block_buffer.push(delta - self.min_delta);
-        }
-
-        let write_width = self.calculate_bit_widths_for_delta_block_buffer(&delta_block_buffer);
-
-        // Write Header
-        // Write number of entries
-        let number_of_entries: u32 = self.values.len() as u32;
-        buffer.write_all(&number_of_entries.to_be_bytes());
-        // Write "write-width"
-        buffer.write_all(&write_width.to_be_bytes());
-
-        // Min Delta Base
-        buffer.write_all(&self.min_delta.to_be_bytes());
-        // First Value
-        buffer.write_all(&self.first_value.expect("").to_be_bytes());
-        // End Header
-
-        // FIXME continue here...
-        // now we can drop the long-to-bytes values here
-        let mut payload_buffer = vec![];
-        for i in 0..delta_block_buffer.len() {
-            Self::long_to_bytes(delta_block_buffer[i], &mut payload_buffer, (i * write_width as usize) as usize, write_width);
-        }
-
-        let a = (delta_block_buffer.len() * write_width as usize) as f64;
-        let b = a / 8.0;
-        let encoding_length = b.ceil() as usize;
-
-        // Copy over to "real" buffer
-        buffer.write_all(payload_buffer.as_slice());
-
-
-        // TODO needs to be done right
-        // for val in &self.values {
-        //     buffer.write(&val.to_be_bytes());
-        // }
+        // Flush
+        self.flush();
+        // Copy internal buffer to out buffer
+        buffer.write_all(&self.buffer);
     }
 }
 

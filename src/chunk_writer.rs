@@ -211,13 +211,13 @@ impl ChunkWriter {
 
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
         // Before we can write the header we have to serialize the current page
-        let buffer_size: u8 = match self.current_page_writer.as_mut() {
+        let buffer_size: u32 = match self.current_page_writer.as_mut() {
             Some(page_writer) => {
                 page_writer.prepare_buffer();
                 page_writer.buffer.len()
             }
             None => 0,
-        } as u8;
+        } as u32;
 
         let uncompressed_bytes = buffer_size;
         // We have no compression!

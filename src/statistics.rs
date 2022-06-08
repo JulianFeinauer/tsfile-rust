@@ -5,9 +5,9 @@ use crate::Statistics::INT32;
 
 #[derive(Clone)]
 pub enum Statistics {
-    INT32(StatisticsStruct<i32>),
-    INT64(StatisticsStruct<i64>),
-    FLOAT(StatisticsStruct<f32>),
+    INT32(StatisticsStruct<i32, i64>),
+    INT64(StatisticsStruct<i64, f64>),
+    FLOAT(StatisticsStruct<f32, f64>),
 }
 
 impl Statistics {
@@ -68,13 +68,13 @@ impl Statistics {
     pub fn new(data_type: TSDataType) -> Statistics {
         match data_type {
             TSDataType::INT32 => {
-                Statistics::INT32(StatisticsStruct::<i32>::new())
+                Statistics::INT32(StatisticsStruct::<i32, i64>::new())
             }
             TSDataType::INT64 => {
-                Statistics::INT64(StatisticsStruct::<i64>::new())
+                Statistics::INT64(StatisticsStruct::<i64, f64>::new())
             }
             TSDataType::FLOAT => {
-                Statistics::FLOAT(StatisticsStruct::<f32>::new())
+                Statistics::FLOAT(StatisticsStruct::<f32, f64>::new())
             }
         }
     }
@@ -97,7 +97,7 @@ impl Serializable for Statistics {
 }
 
 #[derive(Copy, Clone)]
-pub struct StatisticsStruct<T> {
+pub struct StatisticsStruct<T, S> {
     ts_first: i64,
     ts_last: i64,
 
@@ -106,14 +106,14 @@ pub struct StatisticsStruct<T> {
     first_value: T,
     last_value: T,
     count: u64,
-    sum_value: i64,
+    sum_value: S,
 }
 
 #[macro_export]
 macro_rules! implement_statistics {
-    ( $type:ty ) => {
-            impl StatisticsStruct<$type> {
-                pub(crate) fn new() -> StatisticsStruct<$type> {
+    ( $type:ty, $sum:ty ) => {
+            impl StatisticsStruct<$type, $sum> {
+                pub(crate) fn new() -> StatisticsStruct<$type, $sum> {
                     StatisticsStruct {
                         ts_first: i64::MAX,
                         ts_last: i64::MIN,
@@ -122,11 +122,11 @@ macro_rules! implement_statistics {
                         first_value: 0 as $type,
                         last_value: 0 as $type,
                         count: 0,
-                        sum_value: 0,
+                        sum_value: 0 as $sum,
                     }
                 }
 
-                pub(crate) fn merge(&mut self, statistics: &StatisticsStruct<$type>) {
+                pub(crate) fn merge(&mut self, statistics: &StatisticsStruct<$type, $sum>) {
                     if statistics.ts_first < self.ts_first {
                         self.ts_first = statistics.ts_first;
                         self.first_value = statistics.first_value;
@@ -161,13 +161,13 @@ macro_rules! implement_statistics {
                         self.max_value = value;
                     }
                     self.count += 1;
-                    self.sum_value += value as i64;
+                    self.sum_value += value as $sum;
                 }
 
             }
 
 
-            impl Serializable for StatisticsStruct<$type> {
+            impl Serializable for StatisticsStruct<$type, $sum> {
                 fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
                     // Header for statistics
                     write_var_u32(self.count as u32, file);
@@ -184,16 +184,8 @@ macro_rules! implement_statistics {
         }
     }
 
-
-#[macro_export]
-macro_rules! implement_int_statistics {
-    ( $type:ty ) => {
-        implement_statistics!($type);
-    }
-    }
-
-implement_int_statistics!(i32);
-implement_statistics!(i64);
-implement_statistics!(f32);
+implement_statistics!(i32, i64);
+implement_statistics!(i64, f64);
+implement_statistics!(f32, f64);
 // TODO Implement / use
 // implement_statistics!(f64);
