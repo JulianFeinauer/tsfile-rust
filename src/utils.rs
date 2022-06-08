@@ -43,3 +43,7 @@ pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     }
     return value | ((b as u32) << i);
 }
+
+pub(crate) fn write_var_i64(value: i64, buffer: &mut Vec<u8>) {
+    todo!()
+}

@@ -1,5 +1,7 @@
 #![allow(unused_must_use)]
 
+extern crate core;
+
 use std::{io, vec};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -10,8 +12,9 @@ use std::marker::PhantomData;
 
 use compression::CompressionType;
 use encoding::{TimeEncoder, TSEncoding};
-use crate::chunk_writer::{Chunkeable, ChunkMetadata, ChunkWriter};
+use tsfile_writer::TsFileWriter;
 use crate::encoding::Encoder;
+use crate::chunk_writer::ChunkMetadata;
 
 use crate::MetadataIndexNodeType::LeafDevice;
 use crate::murmur128::Murmur128;
@@ -25,6 +28,8 @@ mod test;
 mod utils;
 mod murmur128;
 mod schema;
+mod tsfile_writer;
+mod group_writer;
 mod chunk_writer;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
@@ -84,7 +89,7 @@ impl<T: Write> WriteWrapper<T> {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum TSDataType {
     INT32,
     INT64,
@@ -140,107 +145,6 @@ pub struct MeasurementGroup {
 
 pub struct Schema {
     measurement_groups: HashMap<String, MeasurementGroup>,
-}
-
-struct PageWriter<T> {
-    time_encoder: TimeEncoder,
-    value_encoder: Box<dyn Encoder<T>>,
-    // Necessary for writing
-    buffer: Vec<u8>,
-    phantom: PhantomData<T>
-}
-
-
-impl<T> PageWriter<T> {
-    // TODO why is this never called?
-    #[allow(dead_code)]
-    pub(crate) fn serialize(&self, file: &mut File, compression: CompressionType) {
-        if compression != CompressionType::UNCOMPRESSED {
-            panic!("Only uncompressed is supported now!")
-        }
-        // Write header
-        // Write uncompressed size
-        let len_as_bytes = (self.buffer.len() as i32).to_be_bytes();
-        file.write_all(&len_as_bytes);
-        // Write compressed size (same for now)
-        file.write_all(&len_as_bytes);
-        // End of Header
-        // Write statistic ???
-        // Write data
-        file.write_all(self.buffer.as_slice());
-    }
-}
-
-impl<T> PageWriter<T> {
-    fn new<E: Encoder<T> + 'static>(encoder: E) -> PageWriter<T> {
-        PageWriter {
-            time_encoder: TimeEncoder::new(),
-            value_encoder: Box::new(encoder),
-            buffer: vec![],
-            phantom: PhantomData::default()
-        }
-    }
-
-    pub(crate) fn write(&mut self, timestamp: i64, value: T) -> Result<(), &str> {
-        self.time_encoder.encode(timestamp);
-        self.value_encoder.encode(value);
-        Ok(())
-    }
-
-    pub(crate) fn prepare_buffer(&mut self) {
-        // serialize time_encoder and value encoder
-        let mut time_buffer = vec![];
-        self.time_encoder.serialize(&mut time_buffer);
-        utils::write_var_u32(time_buffer.len() as u32, &mut self.buffer);
-        self.buffer.write_all(time_buffer.as_slice());
-        self.value_encoder.serialize(&mut self.buffer);
-    }
-}
-
-struct GroupWriter {
-    path: Path,
-    chunk_writers: HashMap<String, Box<dyn Chunkeable>>,
-}
-
-impl GroupWriter {
-    pub(crate) fn write(
-        &mut self,
-        measurement_id: String,
-        timestamp: i64,
-        value: IoTDBValue,
-    ) -> Result<(), &str> {
-        match &mut self.chunk_writers.get_mut(&measurement_id) {
-            Some(chunk_writer) => {
-                chunk_writer.write(timestamp, value);
-                Ok(())
-            }
-            None => Err("Unknown measurement id"),
-        }
-    }
-
-    fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), &str> {
-        // Marker
-        file.write(&[0]);
-        // Chunk Group Header
-        write_str(file, self.path.path.as_str());
-        // End Group Header
-        for (_, chunk_writer) in self.chunk_writers.iter_mut() {
-            chunk_writer.serialize(file);
-        }
-        // TODO Footer?
-        Ok(())
-    }
-
-    fn get_metadata(&self) -> ChunkGroupMetadata {
-        ChunkGroupMetadata::new(
-            self.path.path.clone(),
-            self
-                .chunk_writers
-                .iter()
-                .map(|(_, cw)| cw.get_metadata())
-                .collect(),
-        )
-    }
 }
 
 struct ChunkGroupMetadata {
@@ -757,217 +661,6 @@ impl Serializable for TsFileMetadata {
     }
 }
 
-struct TsFileWriter {
-    filename: String,
-    group_writers: HashMap<Path, GroupWriter>,
-    chunk_group_metadata: Vec<ChunkGroupMetadata>,
-    timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
-}
-
-impl TsFileWriter {
-    pub(crate) fn write(
-        &mut self,
-        device: &str,
-        measurement_id: &str,
-        timestamp: i64,
-        value: IoTDBValue,
-    ) -> Result<(), &str> {
-        let device = Path {
-            path: String::from(device)
-        };
-        match self.group_writers.get_mut(&device) {
-            Some(group) => {
-                return group.write(String::from(measurement_id), timestamp, value);
-            }
-            None => {
-                return Err("Unable to find group writer");
-            }
-        }
-    }
-
-    fn flush_metadata_index(
-        &mut self,
-        file: &mut dyn PositionedWrite,
-        chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>,
-    ) -> MetadataIndexNode {
-        for (path, metadata) in chunk_metadata_list {
-            let data_type = metadata.get(0).unwrap().data_type;
-            let serialize_statistic = metadata.len() > 1;
-            let mut statistics = Statistics::new(data_type);
-            let mut buffer: Vec<u8> = vec![];
-
-            for m in metadata {
-                if m.data_type != data_type {
-                    continue;
-                }
-                // Serialize
-                m.serialize(&mut buffer, serialize_statistic);
-
-                let statistic = &m.statistics;
-                // Update the statistics
-                statistics.merge(statistic);
-            }
-
-            // Build Timeseries Index
-            let timeseries_metadata = TimeSeriesMetadata {
-                time_series_metadata_type: match serialize_statistic {
-                    true => 1,
-                    false => 0,
-                } | &metadata.get(0).unwrap().mask,
-                chunk_meta_data_list_data_size: buffer.len(),
-                measurement_id: metadata.get(0).unwrap().measurement_id.to_owned(),
-                data_type,
-                statistics: statistics,
-                buffer,
-            };
-
-            // Add to the global struct
-            let split = path.path.split(".").collect::<Vec<&str>>();
-            let mut device_id = "".to_owned();
-            for i in 0..split.len() - 1 {
-                if i > 0 {
-                    device_id.push_str(".");
-                }
-                device_id.push_str(*split.get(i).unwrap());
-            }
-
-            if !self.timeseries_metadata_map.contains_key(&device_id) {
-                self.timeseries_metadata_map
-                    .insert(device_id.to_owned(), vec![]);
-            }
-
-            self.timeseries_metadata_map
-                .get_mut(&device_id)
-                .unwrap()
-                .push(Box::new(timeseries_metadata));
-        }
-
-        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, file);
-    }
-
-    #[allow(unused_variables)]
-    fn _flush<'b>(&mut self, file: &'b mut dyn PositionedWrite) -> Result<(), &str> {
-        // Start to write to file
-        // Header
-        // let mut file = File::create(self.filename).expect("create failed");
-        let version: [u8; 1] = [3];
-
-        // Header
-        file.write("TsFile".as_bytes()).expect("write failed");
-        file.write(&version).expect("write failed");
-        // End of Header
-
-        // Now iterate the
-        for (_, group_writer) in self.group_writers.iter_mut() {
-            // Write the group
-            group_writer.serialize(file);
-        }
-        // Statistics
-        // Fetch all metadata
-        self.chunk_group_metadata = self
-            .group_writers
-            .iter()
-            .map(|(_, gw)| gw.get_metadata())
-            .collect();
-
-        // Create metadata list
-        let mut chunk_metadata_map: HashMap<Path, Vec<ChunkMetadata>> = HashMap::new();
-        for group_metadata in &self.chunk_group_metadata {
-            for chunk_metadata in &group_metadata.chunk_metadata {
-                let device_path = format!(
-                    "{}.{}",
-                    &group_metadata.device_id, &chunk_metadata.measurement_id
-                );
-                let path = Path {
-                    path: device_path.clone(),
-                };
-                if !&chunk_metadata_map.contains_key(&path) {
-                    &chunk_metadata_map.insert(path.clone(), vec![]);
-                }
-                &chunk_metadata_map
-                    .get_mut(&path)
-                    .unwrap()
-                    .push(chunk_metadata.clone());
-            }
-        }
-
-        // Get meta offset
-        let meta_offset = file.get_position();
-
-        // Write Marker 0x02
-        file.write_all(&[0x02]);
-
-        let metadata_index_node = self.flush_metadata_index(file, &chunk_metadata_map);
-
-        let ts_file_metadata = TsFileMetadata::new(Some(metadata_index_node), meta_offset);
-
-        let footer_index = file.get_position();
-
-        ts_file_metadata.serialize(file);
-
-        // Now serialize the Bloom Filter ?!
-
-        let paths = chunk_metadata_map.keys().into_iter().map(|path| { path.clone() }).collect();
-
-        let bloom_filter = BloomFilter::build(paths);
-
-        bloom_filter.serialize(file);
-
-
-        let size_of_footer = (file.get_position() - footer_index) as u32;
-
-        file.write_all(&size_of_footer.to_be_bytes());
-
-        // Footer
-        file.write_all("TsFile".as_bytes());
-        Ok(())
-    }
-
-    pub(crate) fn flush(&mut self) -> Result<(), &str> {
-        let mut file = WriteWrapper::new(File::create(self.filename.clone()).expect("create failed"));
-        self._flush(&mut file)
-    }
-}
-
-impl TsFileWriter {
-    fn new(filename: &str, schema: Schema) -> TsFileWriter {
-        let group_writers = schema
-            .measurement_groups
-            .into_iter()
-            .map(|(path, v)| {
-                (
-                    Path { path: path.clone() },
-                    GroupWriter {
-                        path: Path { path: path.clone() },
-                        chunk_writers: v
-                            .measurement_schemas
-                            .iter()
-                            .map(|(measurement_id, measurement_schema)| {
-                                (
-                                    measurement_id.clone(),
-                                    ChunkWriter::<i32>::new(
-                                        measurement_id.clone(),
-                                        measurement_schema.data_type,
-                                        measurement_schema.compression,
-                                        measurement_schema.encoding,
-                                    ),
-                                )
-                            })
-                            .collect(),
-                    },
-                )
-            })
-            .collect();
-
-        TsFileWriter {
-            filename: String::from(filename),
-            group_writers,
-            chunk_group_metadata: vec![],
-            timeseries_metadata_map: HashMap::new(),
-        }
-    }
-}
-
 struct ChunkGroupHeader<'a> {
     device_id: &'a str,
 }
@@ -1139,10 +832,11 @@ mod tests {
     use std::collections::HashMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, TsFileWriter, write_file, write_file_2, write_file_3, WriteWrapper};
+    use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema, TSDataType, write_file, write_file_2, write_file_3, WriteWrapper};
     use crate::compression::CompressionType;
     use crate::encoding::TSEncoding;
     use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
+    use crate::tsfile_writer::TsFileWriter;
     use crate::utils::{read_var_u32, write_var_u32};
 
     #[test]

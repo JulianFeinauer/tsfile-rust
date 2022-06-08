@@ -1,12 +1,30 @@
 use std::io;
 
-use crate::{PositionedWrite, Serializable, TSDataType, write_var_u32};
+use crate::{IoTDBValue, PositionedWrite, Serializable, TSDataType, write_var_u32};
+use crate::Statistics::INT32;
 
 #[derive(Clone)]
 pub enum Statistics {
     INT32(StatisticsStruct<i32>),
     INT64(StatisticsStruct<i64>),
     FLOAT(StatisticsStruct<f32>),
+}
+
+impl Statistics {
+    pub(crate) fn update(&mut self, timestamp: i64, value: &IoTDBValue) {
+        match (self, value) {
+            (Statistics::INT32(s), IoTDBValue::INT(v)) => {
+                    s.update(timestamp, *v)
+            }
+            (Statistics::INT64(s), IoTDBValue::LONG(v)) => {
+                    s.update(timestamp, *v)
+            }
+            (Statistics::FLOAT(s), IoTDBValue::FLOAT(v)) => {
+                    s.update(timestamp, *v)
+            }
+            _ => todo!()
+        }
+    }
 }
 
 impl Statistics {

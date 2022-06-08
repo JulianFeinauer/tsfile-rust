@@ -2,7 +2,7 @@ use std::cmp::max;
 use std::io::Write;
 use crate::{PositionedWrite, utils};
 
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum TSEncoding {
     PLAIN
 }
@@ -49,9 +49,7 @@ impl Encoder<i64> for PlainIntEncoder<i64> {
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
         for val in &self.values {
-            // FIXME implement this
-            // utils::write_var_i32(*val, buffer);
-            panic!("Not implemented yet!")
+            buffer.write_all(&val.to_be_bytes());
         }
     }
 }
@@ -62,9 +60,7 @@ impl Encoder<f32> for PlainIntEncoder<f32> {
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
         for val in &self.values {
-            // FIXME implement this
-            // utils::write_var_i32(*val, buffer);
-            panic!("Not implemented yet!")
+            buffer.write_all(&val.to_be_bytes());
         }
     }
 }
