@@ -158,7 +158,7 @@ impl TimeEncoder {
     }
 
     fn flush(&mut self) {
-        if self.values.is_empty() {
+        if self.first_value == None {
             return;
         }
         // Preliminary calculations

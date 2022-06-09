@@ -175,6 +175,7 @@ pub struct ChunkWriter {
     offset_of_chunk_header: Option<u64>,
     pub(crate) statistics: Statistics,
     current_page_writer: Option<PageWriter>,
+    page_buffer: Vec<u8>
 }
 
 impl ChunkWriter {
@@ -205,43 +206,37 @@ impl ChunkWriter {
             mask: 0,
             offset_of_chunk_header: None,
             statistics: Statistics::new(data_type),
-            current_page_writer: None
+            current_page_writer: None,
+            page_buffer: vec![]
         }
     }
 
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
         // Before we can write the header we have to serialize the current page
-        let buffer_size: u32 = match self.current_page_writer.as_mut() {
-            Some(page_writer) => {
-                page_writer.prepare_buffer();
-                page_writer.buffer.len()
-            }
-            None => 0,
-        } as u32;
-
-        let uncompressed_bytes = buffer_size;
-        // We have no compression!
-        let compressed_bytes = uncompressed_bytes;
-
-        let mut page_buffer: Vec<u8> = vec![];
-
-        // Uncompressed size
-        utils::write_var_u32(uncompressed_bytes as u32, &mut page_buffer);
-        // Compressed size
-        utils::write_var_u32(compressed_bytes as u32, &mut page_buffer);
-
-        // page data
         match self.current_page_writer.as_mut() {
             Some(page_writer) => {
-                page_buffer.write_all(&page_writer.buffer);
+                page_writer.prepare_buffer();
+
+                let buffer_size: u32 = page_writer.buffer.len() as u32;
+
+                let uncompressed_bytes = buffer_size;
+                // We have no compression!
+                let compressed_bytes = uncompressed_bytes;
+
+                // TODO we need a change here if multiple pages exist
+
+                // Uncompressed size
+                utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
+                // Compressed size
+                utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+
+                // Write page content
+                self.page_buffer.write_all(&page_writer.buffer);
             }
-            None => {
-                panic!("Unable to flush without page writer!")
-            }
-        }
+            _ => {}
+        };
 
         // Chunk Header
-
         // store offset for metadata
         self.offset_of_chunk_header = Some(file.get_position());
 
@@ -249,7 +244,7 @@ impl ChunkWriter {
 
         write_str(file, self.measurement_id.as_str());
         // Data Lenght
-        utils::write_var_u32(page_buffer.len() as u32, file);
+        utils::write_var_u32(self.page_buffer.len() as u32, file);
         // Data Type INT32 -> 1
         file.write(&[self.data_type.serialize()])
             .expect("write failed");
@@ -262,7 +257,7 @@ impl ChunkWriter {
         // End Chunk Header
 
         // Write the full page
-        file.write_all(&page_buffer);
+        file.write_all(&self.page_buffer);
     }
 
     pub(crate) fn get_metadata(&self) -> ChunkMetadata {
