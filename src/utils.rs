@@ -1,5 +1,5 @@
-use std::io::{Read};
 use crate::PositionedWrite;
+use std::io::Read;
 
 pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
     let mut number = num.clone();

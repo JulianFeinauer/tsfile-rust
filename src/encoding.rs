@@ -1,17 +1,17 @@
+use crate::TSDataType;
+use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
-use crate::{IoTDBValue, PositionedWrite, utils};
-use crate::TSDataType;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
-    PLAIN
+    PLAIN,
 }
 
 impl TSEncoding {
     pub fn serialize(&self) -> u8 {
         match self {
-            TSEncoding::PLAIN => 0
+            TSEncoding::PLAIN => 0,
         }
     }
 }
@@ -26,16 +26,13 @@ pub trait Encoder2 {
 impl dyn Encoder2 {
     pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder2> {
         match (data_type, encoding) {
-            (TSDataType::INT32, TSEncoding::PLAIN) => {
-                Box::new(PlainIntEncoder::<i32>::new())
-            }
-            (TSDataType::FLOAT, TSEncoding::PLAIN) => {
-                Box::new(PlainIntEncoder::<f32>::new())
-            }
-            (TSDataType::INT64, TSEncoding::PLAIN) => {
-                Box::new(PlainIntEncoder::<i64>::new())
-            }
-            _ => panic!("No Encoder implemented for ({:?}, {:?})", data_type, encoding)
+            (TSDataType::INT32, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i32>::new()),
+            (TSDataType::FLOAT, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<f32>::new()),
+            (TSDataType::INT64, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i64>::new()),
+            _ => panic!(
+                "No Encoder implemented for ({:?}, {:?})",
+                data_type, encoding
+            ),
         }
     }
 }
@@ -50,12 +47,11 @@ impl<T> PlainIntEncoder<T> {
     }
 }
 
-
 impl Encoder2 for PlainIntEncoder<f32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::FLOAT(v) => self.values.push(*v),
-            _ => panic!("Something went wrong!")
+            _ => panic!("Something went wrong!"),
         }
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
@@ -76,7 +72,7 @@ impl Encoder2 for PlainIntEncoder<i32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::INT(v) => self.values.push(*v),
-            _ => panic!("Something went wrong!")
+            _ => panic!("Something went wrong!"),
         }
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
@@ -99,7 +95,7 @@ impl Encoder2 for PlainIntEncoder<i64> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::LONG(v) => self.values.push(*v),
-            _ => panic!("Something went wrong!")
+            _ => panic!("Something went wrong!"),
         }
     }
 
@@ -125,9 +121,7 @@ impl PositionedWrite for Vec<u8> {
 
 impl<T> PlainIntEncoder<T> {
     pub(crate) fn new() -> PlainIntEncoder<T> {
-        Self {
-            values: vec![]
-        }
+        Self { values: vec![] }
     }
 }
 
@@ -164,7 +158,10 @@ impl TimeEncoder {
         return 64 - v.leading_zeros();
     }
 
-    fn calculate_bit_widths_for_delta_block_buffer(&mut self, delta_block_buffer: &Vec<i64>) -> u32 {
+    fn calculate_bit_widths_for_delta_block_buffer(
+        &mut self,
+        delta_block_buffer: &Vec<i64>,
+    ) -> u32 {
         let mut width = 0;
 
         for i in 0..delta_block_buffer.len() {
@@ -184,8 +181,8 @@ impl TimeEncoder {
         let mut my_number = number;
         while my_width > 0 {
             let m = match my_width + cnt >= 8 {
-                true => { 8 - cnt }
-                false => { my_width }
+                true => 8 - cnt,
+                false => my_width,
             };
             my_width = my_width - m;
             let old_count = cnt;
@@ -222,7 +219,6 @@ impl TimeEncoder {
     }
 }
 
-
 impl TimeEncoder {
     pub(crate) fn new() -> TimeEncoder {
         TimeEncoder {
@@ -257,14 +253,20 @@ impl TimeEncoder {
         // Min Delta Base
         self.buffer.write_all(&self.min_delta.to_be_bytes());
         // First Value
-        self.buffer.write_all(&self.first_value.expect("").to_be_bytes());
+        self.buffer
+            .write_all(&self.first_value.expect("").to_be_bytes());
         // End Header
 
         // FIXME continue here...
         // now we can drop the long-to-bytes values here
         let mut payload_buffer = vec![];
         for i in 0..delta_block_buffer.len() {
-            Self::long_to_bytes(delta_block_buffer[i], &mut payload_buffer, (i * write_width as usize) as usize, write_width);
+            Self::long_to_bytes(
+                delta_block_buffer[i],
+                &mut payload_buffer,
+                (i * write_width as usize) as usize,
+                write_width,
+            );
         }
 
         let a = (delta_block_buffer.len() * write_width as usize) as f64;

@@ -1,7 +1,7 @@
+use crate::chunk_writer::ChunkWriter;
+use crate::{Chunk, ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::HashMap;
 use std::io::Write;
-use crate::{Chunk, ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
-use crate::chunk_writer::ChunkWriter;
 
 pub struct GroupWriter {
     pub(crate) path: Path,
@@ -56,8 +56,7 @@ impl GroupWriter {
     pub(crate) fn get_metadata(&self) -> ChunkGroupMetadata {
         ChunkGroupMetadata::new(
             self.path.path.clone(),
-            self
-                .chunk_writers
+            self.chunk_writers
                 .iter()
                 .map(|(_, cw)| cw.get_metadata())
                 .collect(),

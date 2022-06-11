@@ -1,11 +1,14 @@
+use crate::encoding::Encoder2;
+use crate::encoding::{PlainIntEncoder, TimeEncoder};
+use crate::statistics::Statistics;
+use crate::TSDataType::FLOAT;
+use crate::{
+    utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType,
+    TSEncoding,
+};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use crate::{CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType, TSEncoding, utils, write_str};
-use crate::encoding::{PlainIntEncoder, TimeEncoder};
-use crate::statistics::Statistics;
-use crate::encoding::Encoder2;
-use crate::TSDataType::FLOAT;
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
@@ -206,7 +209,6 @@ const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 //     }
 // }
 
-
 struct PageWriter {
     time_encoder: TimeEncoder,
     value_encoder: Box<dyn Encoder2>,
@@ -315,7 +317,8 @@ impl ChunkWriter {
                 self.write_page_to_buffer();
                 self.value_count_in_one_page_for_next_check = MINIMUM_RECORD_COUNT_FOR_CHECK;
             } else {
-                self.value_count_in_one_page_for_next_check = PAGE_SIZE_THRESHOLD / current_page_size * page_writer.point_number;
+                self.value_count_in_one_page_for_next_check =
+                    PAGE_SIZE_THRESHOLD / current_page_size * page_writer.point_number;
             }
         }
     }
@@ -359,9 +362,13 @@ impl ChunkWriter {
                 // TODO we need a change here if multiple pages exist
                 if self.num_pages == 0 {
                     // Uncompressed size
-                    self.size_without_statistics += utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer) as usize;
+                    self.size_without_statistics +=
+                        utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer)
+                            as usize;
                     // Compressed size
-                    self.size_without_statistics += utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer) as usize;
+                    self.size_without_statistics +=
+                        utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)
+                            as usize;
 
                     // Write page content
                     self.page_buffer.write_all(&page_writer.buffer);
@@ -371,12 +378,14 @@ impl ChunkWriter {
                 } else if self.num_pages == 1 {
                     let temp = self.page_buffer.clone();
                     self.page_buffer.clear();
-                    self.page_buffer.write_all(&temp[..self.size_without_statistics]);
+                    self.page_buffer
+                        .write_all(&temp[..self.size_without_statistics]);
                     match &self.first_page_statistics {
                         Some(stat) => stat.serialize(&mut self.page_buffer),
-                        _ => panic!("This should not happen!")
+                        _ => panic!("This should not happen!"),
                     };
-                    self.page_buffer.write_all(&temp[self.size_without_statistics..]);
+                    self.page_buffer
+                        .write_all(&temp[self.size_without_statistics..]);
 
                     // Uncompressed size
                     utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
@@ -407,7 +416,12 @@ impl ChunkWriter {
 }
 
 impl ChunkWriter {
-    pub fn new(measurement_id: String, data_type: TSDataType, compression_type: CompressionType, encoding: TSEncoding) -> ChunkWriter {
+    pub fn new(
+        measurement_id: String,
+        data_type: TSDataType,
+        compression_type: CompressionType,
+        encoding: TSEncoding,
+    ) -> ChunkWriter {
         ChunkWriter {
             measurement_id,
             data_type,
@@ -469,7 +483,6 @@ impl ChunkWriter {
         }
     }
 }
-
 
 #[derive(Clone)]
 pub struct ChunkMetadata {

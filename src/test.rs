@@ -1,7 +1,7 @@
 enum IoTDBValue {
     DOUBLE(f64),
     FLOAT(f32),
-    INT(i32)
+    INT(i32),
 }
 
 struct Chunk<T> {
@@ -19,10 +19,8 @@ impl Chunkeable for Chunk<i32> {
                 self.raw_value = Some(inner);
                 Ok(())
             }
-            _ => {
-                Err(())
-            }
-        }
+            _ => Err(()),
+        };
     }
 }
 
@@ -33,10 +31,8 @@ impl Chunkeable for Chunk<f32> {
                 self.raw_value = Some(inner);
                 Ok(())
             }
-            _ => {
-                Err(())
-            }
-        }
+            _ => Err(()),
+        };
     }
 }
 
@@ -47,38 +43,35 @@ impl Chunkeable for Chunk<f64> {
                 self.raw_value = Some(inner);
                 Ok(())
             }
-            _ => {
-                Err(())
-            }
-        }
+            _ => Err(()),
+        };
     }
 }
 
 impl<T> Chunk<T> {
     fn new() -> Chunk<T> {
-        return Chunk {
-            raw_value: None,
-        };
+        return Chunk { raw_value: None };
     }
 }
 
 struct ChunkGroup {
-    chunks: Vec<Box<dyn Chunkeable>>
+    chunks: Vec<Box<dyn Chunkeable>>,
 }
 
 #[cfg(test)]
 mod testsabc {
-    use std::ops::{DerefMut};
+    use std::ops::DerefMut;
 
     use crate::test::{Chunk, ChunkGroup, IoTDBValue};
 
     #[test]
     fn it_works() {
         let mut cg = ChunkGroup {
-            chunks: vec![Box::new(Chunk::<i32>::new()),
-                         Box::new(Chunk::<f32>::new()),
-                         Box::new(Chunk::<f64>::new())
-            ]
+            chunks: vec![
+                Box::new(Chunk::<i32>::new()),
+                Box::new(Chunk::<f32>::new()),
+                Box::new(Chunk::<f64>::new()),
+            ],
         };
 
         match cg.chunks.get_mut(0) {
@@ -100,5 +93,4 @@ mod testsabc {
             }
         }
     }
-
 }

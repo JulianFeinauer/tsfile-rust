@@ -1,9 +1,13 @@
+use crate::chunk_writer::ChunkWriter;
+use crate::group_writer::GroupWriter;
+use crate::{
+    BloomFilter, ChunkGroupMetadata, ChunkMetadata, IoTDBValue, MetadataIndexNode, Path,
+    PositionedWrite, Schema, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable,
+    TsFileMetadata, WriteWrapper,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
-use crate::{BloomFilter, ChunkGroupMetadata, ChunkMetadata, IoTDBValue, MetadataIndexNode, Path, PositionedWrite, Schema, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TsFileMetadata, WriteWrapper};
-use crate::group_writer::GroupWriter;
-use crate::chunk_writer::ChunkWriter;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
@@ -17,7 +21,6 @@ pub struct TsFileWriter {
 }
 
 impl TsFileWriter {
-
     pub(crate) fn write(
         &mut self,
         device: &str,
@@ -26,7 +29,7 @@ impl TsFileWriter {
         value: IoTDBValue,
     ) -> Result<(), &str> {
         let device = Path {
-            path: String::from(device)
+            path: String::from(device),
         };
         match self.group_writers.get_mut(&device) {
             Some(group) => {
@@ -42,10 +45,14 @@ impl TsFileWriter {
         if self.record_count >= self.record_count_for_next_mem_check {
             let mem_size = self.calculate_mem_size_for_all_groups();
             if (mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE) {
-                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check * CHUNK_GROUP_SIZE_THRESHOLD_BYTE / mem_size;
+                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE
+                    / mem_size;
                 return self.flush_all_chunk_groups();
             } else {
-                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check * CHUNK_GROUP_SIZE_THRESHOLD_BYTE / mem_size;
+                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE
+                    / mem_size;
                 return false;
             }
         }
@@ -57,18 +64,17 @@ impl TsFileWriter {
     }
 
     fn calculate_mem_size_for_all_groups(&mut self) -> u32 {
-    //     long memTotalSize = 0;
-    // for (IChunkGroupWriter group : groupWriters.values()) {
-    //   memTotalSize += group.updateMaxGroupMemSize();
-    // }
-    // return memTotalSize;
+        //     long memTotalSize = 0;
+        // for (IChunkGroupWriter group : groupWriters.values()) {
+        //   memTotalSize += group.updateMaxGroupMemSize();
+        // }
+        // return memTotalSize;
         let mut mem_total_size = 0_u32;
         for group in self.group_writers.values() {
             mem_total_size += group.update_max_group_mem_size();
         }
         mem_total_size
     }
-
 
     fn flush_metadata_index(
         &mut self,
@@ -192,12 +198,15 @@ impl TsFileWriter {
 
         // Now serialize the Bloom Filter ?!
 
-        let paths = chunk_metadata_map.keys().into_iter().map(|path| { path.clone() }).collect();
+        let paths = chunk_metadata_map
+            .keys()
+            .into_iter()
+            .map(|path| path.clone())
+            .collect();
 
         let bloom_filter = BloomFilter::build(paths);
 
         bloom_filter.serialize(file);
-
 
         let size_of_footer = (file.get_position() - footer_index) as u32;
 
@@ -209,7 +218,8 @@ impl TsFileWriter {
     }
 
     pub(crate) fn flush(&mut self) -> Result<(), &str> {
-        let mut file = WriteWrapper::new(File::create(self.filename.clone()).expect("create failed"));
+        let mut file =
+            WriteWrapper::new(File::create(self.filename.clone()).expect("create failed"));
         self._flush(&mut file)
     }
 }
@@ -250,7 +260,7 @@ impl TsFileWriter {
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),
             record_count: 0,
-            record_count_for_next_mem_check: 100
+            record_count_for_next_mem_check: 100,
         }
     }
 }
