@@ -13,7 +13,6 @@ use std::marker::PhantomData;
 use compression::CompressionType;
 use encoding::{TimeEncoder, TSEncoding};
 use tsfile_writer::TsFileWriter;
-use crate::encoding::Encoder;
 use crate::chunk_writer::ChunkMetadata;
 
 use crate::MetadataIndexNodeType::LeafDevice;
@@ -1083,8 +1082,8 @@ mod tests {
         let mut buffer_writer = WriteWrapper::new(buffer);
 
         writer._flush(&mut buffer_writer);
-        //
-        // assert_eq!(buffer_writer.writer, expected);
+
+        assert_eq!(buffer_writer.writer, expected);
         // assert_eq!(buffer_writer.position, 203);
     }
 
@@ -1192,5 +1191,29 @@ mod tests {
         writer._flush(&mut buffer_writer);
 
         assert_eq!(buffer_writer.writer, expected);
+    }
+
+    #[test]
+    fn write_datapoint_int64_10000() {
+        let schema = TsFileSchemaBuilder::new()
+            .add("d1", DeviceBuilder::new()
+                .add("s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED)
+                .build()
+            )
+            .build();
+
+
+        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+
+        for i in 0..10001 {
+            writer.write("d1", "s", i, IoTDBValue::LONG(i));
+        }
+
+
+        let buffer: Vec<u8> = vec![];
+
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        writer._flush(&mut buffer_writer);
     }
 }

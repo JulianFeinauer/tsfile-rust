@@ -2,157 +2,256 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
 use crate::{CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType, TSEncoding, utils, write_str};
-use crate::chunk_writer::TypedEncoder::{Float, Int, Long};
 use crate::encoding::{PlainIntEncoder, TimeEncoder};
 use crate::statistics::Statistics;
-use crate::encoding::Encoder;
+use crate::encoding::Encoder2;
 use crate::TSDataType::FLOAT;
 
-pub enum TypedEncoder {
-    Int(IntEncoder),
-    Long(LongEncoder),
-    Float(FloatEncoder)
-}
+const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
+const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
+const PAGE_SIZE_THRESHOLD: u32 = 65536;
+const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
-impl TypedEncoder {
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        match self {
-            TypedEncoder::Int(encoder) => encoder.serialize(buffer),
-            TypedEncoder::Long(encoder) => encoder.serialize(buffer),
-            TypedEncoder::Float(encoder) => encoder.serialize(buffer)
-        }
-    }
-
-    pub(crate) fn write(&mut self, value: &IoTDBValue) -> Result<(), &str> {
-        match (self, value) {
-            (Int(encoder), IoTDBValue::INT(i)) => encoder.write(*i),
-            (Long(encoder), IoTDBValue::LONG(i)) => encoder.write(*i),
-            (Float(encoder), IoTDBValue::FLOAT(i)) => encoder.write(*i),
-            (_, _) => panic!("Something went terribly wrong here!")
-        }
-    }
-
-    fn new(data_type: TSDataType, encoding: TSEncoding) -> TypedEncoder {
-        match data_type {
-            TSDataType::INT32 => TypedEncoder::Int(IntEncoder::new(encoding)),
-            TSDataType::INT64 => TypedEncoder::Long(LongEncoder::new(encoding)),
-            TSDataType::FLOAT => TypedEncoder::Float(FloatEncoder::new(encoding)),
-            _ => panic!("No Encoder for data type {:?}", data_type)
-        }
-    }
-}
-
-pub enum IntEncoder {
-    Plain(PlainIntEncoder<i32>)
-}
-
-impl IntEncoder {
-    pub(crate) fn write(&mut self, value: i32) -> Result<(), &str> {
-        match self {
-            IntEncoder::Plain(encoder) => {
-                encoder.encode(value);
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        match self {
-            IntEncoder::Plain(encoder) => {
-                encoder.serialize(buffer);
-            }
-        }
-    }
-
-    fn new(encoding: TSEncoding) -> IntEncoder {
-        match encoding {
-            TSEncoding::PLAIN => {
-                IntEncoder::Plain(PlainIntEncoder::<i32>::new())
-            }
-        }
-    }
-}
-
-pub enum LongEncoder {
-    Plain(PlainIntEncoder<i64>)
-}
-
-impl LongEncoder {
-    pub(crate) fn write(&mut self, value: i64) -> Result<(), &str> {
-        match self {
-            LongEncoder::Plain(encoder) => {
-                encoder.encode(value);
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        match self {
-            LongEncoder::Plain(encoder) => {
-                encoder.serialize(buffer);
-            }
-        }
-    }
-
-    fn new(encoding: TSEncoding) -> LongEncoder {
-        match encoding {
-            TSEncoding::PLAIN => {
-                LongEncoder::Plain(PlainIntEncoder::<i64>::new())
-            }
-        }
-    }
-}
-
-pub enum FloatEncoder {
-    Plain(PlainIntEncoder<f32>)
-}
-
-impl FloatEncoder {
-    fn new(encoding: TSEncoding) -> FloatEncoder {
-        match encoding {
-            TSEncoding::PLAIN => FloatEncoder::Plain(PlainIntEncoder::new())
-        }
-    }
-
-    pub(crate) fn write(&mut self, value: f32) -> Result<(), &str> {
-        match self {
-            FloatEncoder::Plain(encoder) => {
-                encoder.encode(value);
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        match self {
-            FloatEncoder::Plain(encoder) => {
-                encoder.serialize(buffer);
-            }
-        }
-    }
-}
+// pub enum TypedEncoder {
+//     Int(IntEncoder),
+//     Long(LongEncoder),
+//     Float(FloatEncoder)
+// }
+//
+// impl TypedEncoder {
+//     pub(crate) fn reset(&mut self) {
+//         match self {
+//             TypedEncoder::Int(encoder) => encoder.reset(),
+//             TypedEncoder::Long(encoder) => encoder.reset(),
+//             TypedEncoder::Float(encoder) => encoder.reset()
+//         }
+//     }
+// }
+//
+// impl TypedEncoder {
+//     pub(crate) fn get_max_byte_size(&self) -> u32 {
+//         match self {
+//             TypedEncoder::Int(encoder) => encoder.get_max_byte_size(),
+//             TypedEncoder::Long(encoder) => encoder.get_max_byte_size(),
+//             TypedEncoder::Float(encoder) => encoder.get_max_byte_size()
+//         }
+//     }
+// }
+//
+// impl TypedEncoder {
+//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
+//         match self {
+//             TypedEncoder::Int(encoder) => encoder.serialize(buffer),
+//             TypedEncoder::Long(encoder) => encoder.serialize(buffer),
+//             TypedEncoder::Float(encoder) => encoder.serialize(buffer)
+//         }
+//     }
+//
+//     pub(crate) fn write(&mut self, value: &IoTDBValue) -> Result<(), &str> {
+//         match (self, value) {
+//             (Int(encoder), IoTDBValue::INT(i)) => encoder.write(*i),
+//             (Long(encoder), IoTDBValue::LONG(i)) => encoder.write(*i),
+//             (Float(encoder), IoTDBValue::FLOAT(i)) => encoder.write(*i),
+//             (_, _) => panic!("Something went terribly wrong here!")
+//         }
+//     }
+//
+//     fn new(data_type: TSDataType, encoding: TSEncoding) -> TypedEncoder {
+//         match data_type {
+//             TSDataType::INT32 => TypedEncoder::Int(IntEncoder::new(encoding)),
+//             TSDataType::INT64 => TypedEncoder::Long(LongEncoder::new(encoding)),
+//             TSDataType::FLOAT => TypedEncoder::Float(FloatEncoder::new(encoding)),
+//             _ => panic!("No Encoder for data type {:?}", data_type)
+//         }
+//     }
+// }
+//
+// pub enum IntEncoder {
+//     Plain(PlainIntEncoder<i32>)
+// }
+//
+// impl IntEncoder {
+//     pub(crate) fn reset(&self) {
+//         todo!()
+//     }
+// }
+//
+// impl IntEncoder {
+//     pub(crate) fn get_max_byte_size(&self) -> u32 {
+//         todo!()
+//     }
+// }
+//
+// impl IntEncoder {
+//     pub(crate) fn write(&mut self, value: i32) -> Result<(), &str> {
+//         match self {
+//             IntEncoder::Plain(encoder) => {
+//                 encoder.encode(value);
+//                 Ok(())
+//             }
+//         }
+//     }
+//
+//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
+//         match self {
+//             IntEncoder::Plain(encoder) => {
+//                 encoder.serialize(buffer);
+//             }
+//         }
+//     }
+//
+//     fn new(encoding: TSEncoding) -> IntEncoder {
+//         match encoding {
+//             TSEncoding::PLAIN => {
+//                 IntEncoder::Plain(PlainIntEncoder::<i32>::new())
+//             }
+//         }
+//     }
+// }
+//
+// pub enum LongEncoder {
+//     Plain(PlainIntEncoder<i64>)
+// }
+//
+// impl LongEncoder {
+//     pub(crate) fn reset(&mut self) {
+//         match self {
+//             LongEncoder::Plain(encoder) => encoder.reset()
+//         }
+//     }
+// }
+//
+// impl LongEncoder {
+//     pub(crate) fn get_max_byte_size(&self) -> u32 {
+//         match self {
+//             LongEncoder::Plain(encoder) => encoder.get_max_byte_size(),
+//         }
+//     }
+// }
+//
+// impl LongEncoder {
+//     pub(crate) fn size(&self) -> u32 {
+//         todo!()
+//     }
+// }
+//
+// impl LongEncoder {
+//     pub(crate) fn write(&mut self, value: i64) -> Result<(), &str> {
+//         match self {
+//             LongEncoder::Plain(encoder) => {
+//                 encoder.encode(value);
+//                 Ok(())
+//             }
+//         }
+//     }
+//
+//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
+//         match self {
+//             LongEncoder::Plain(encoder) => {
+//                 encoder.serialize(buffer);
+//             }
+//         }
+//     }
+//
+//     fn new(encoding: TSEncoding) -> LongEncoder {
+//         match encoding {
+//             TSEncoding::PLAIN => {
+//                 LongEncoder::Plain(PlainIntEncoder::<i64>::new())
+//             }
+//         }
+//     }
+// }
+//
+// pub enum FloatEncoder {
+//     Plain(PlainIntEncoder<f32>)
+// }
+//
+// impl FloatEncoder {
+//     pub(crate) fn reset(&self) {
+//         todo!()
+//     }
+// }
+//
+// impl FloatEncoder {
+//     pub(crate) fn size(&self) -> u32 {
+//         todo!()
+//     }
+//     pub(crate) fn get_max_byte_size(&self) -> u32 {
+//         todo!()
+//     }
+// }
+//
+// impl FloatEncoder {
+//     fn new(encoding: TSEncoding) -> FloatEncoder {
+//         match encoding {
+//             TSEncoding::PLAIN => FloatEncoder::Plain(PlainIntEncoder::new())
+//         }
+//     }
+//
+//     pub(crate) fn write(&mut self, value: f32) -> Result<(), &str> {
+//         match self {
+//             FloatEncoder::Plain(encoder) => {
+//                 encoder.encode(value);
+//                 Ok(())
+//             }
+//         }
+//     }
+//
+//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
+//         match self {
+//             FloatEncoder::Plain(encoder) => {
+//                 encoder.serialize(buffer);
+//             }
+//         }
+//     }
+// }
 
 
 struct PageWriter {
     time_encoder: TimeEncoder,
-    value_encoder: TypedEncoder,
+    value_encoder: Box<dyn Encoder2>,
+    data_type: TSDataType,
+    statistics: Statistics,
+    point_number: u32,
     // Necessary for writing
     buffer: Vec<u8>,
+}
+
+impl PageWriter {
+    pub(crate) fn reset(&mut self) {
+        self.statistics = Statistics::new(self.data_type);
+        self.time_encoder.reset();
+        self.value_encoder.reset();
+    }
+}
+
+impl PageWriter {
+    pub(crate) fn estimate_max_mem_size(&self) -> u32 {
+        return self.time_encoder.size()
+            // currently always 0
+            // + self.value_encoder.size()
+            + self.time_encoder.get_max_byte_size()
+            + self.value_encoder.get_max_byte_size();
+    }
 }
 
 impl PageWriter {
     fn new(data_type: TSDataType, encoding: TSEncoding) -> PageWriter {
         PageWriter {
             time_encoder: TimeEncoder::new(),
-            value_encoder: TypedEncoder::new(data_type, encoding),
-            buffer: vec![]
+            value_encoder: <dyn Encoder2>::new(data_type, encoding),
+            data_type,
+            statistics: Statistics::new(data_type),
+            buffer: vec![],
+            point_number: 0,
         }
     }
 
     fn write(&mut self, timestamp: i64, value: &IoTDBValue) -> Result<(), &str> {
         self.time_encoder.encode(timestamp);
         self.value_encoder.write(value);
+        self.statistics.update(timestamp, value);
+        self.point_number += 1;
         Ok(())
     }
 
@@ -175,12 +274,16 @@ pub struct ChunkWriter {
     offset_of_chunk_header: Option<u64>,
     pub(crate) statistics: Statistics,
     current_page_writer: Option<PageWriter>,
-    page_buffer: Vec<u8>
+    page_buffer: Vec<u8>,
+    num_pages: u32,
+    first_page_statistics: Option<Statistics>,
+    value_count_in_one_page_for_next_check: u32,
+    size_without_statistics: usize,
 }
 
 impl ChunkWriter {
     pub fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<(), &str> {
-        self.statistics.update(timestamp, &value);
+        // self.statistics.update(timestamp, &value);
 
         match &mut self.current_page_writer {
             None => {
@@ -192,7 +295,114 @@ impl ChunkWriter {
             }
         }
         let page_writer = self.current_page_writer.as_mut().unwrap();
-        page_writer.write(timestamp, &value)
+        page_writer.write(timestamp, &value);
+        // check page size
+        self.check_page_size_and_may_open_new_page();
+        Ok(())
+    }
+
+    fn check_page_size_and_may_open_new_page(&mut self) {
+        if self.current_page_writer.is_none() {
+            return;
+        }
+        let page_writer = self.current_page_writer.as_ref().unwrap();
+        if page_writer.point_number > MAX_NUMBER_OF_POINTS_IN_PAGE {
+            self.write_page_to_buffer();
+        } else if page_writer.point_number >= VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK {
+            let current_page_size = page_writer.estimate_max_mem_size();
+
+            if current_page_size > PAGE_SIZE_THRESHOLD {
+                self.write_page_to_buffer();
+                self.value_count_in_one_page_for_next_check = MINIMUM_RECORD_COUNT_FOR_CHECK;
+            } else {
+                self.value_count_in_one_page_for_next_check = PAGE_SIZE_THRESHOLD / current_page_size * page_writer.point_number;
+            }
+        }
+    }
+
+    //   private void checkPageSizeAndMayOpenANewPage() {
+    //   if (pageWriter.getPointNumber() == maxNumberOfPointsInPage) {
+    //     logger.debug("current line count reaches the upper bound, write page {}", measurementSchema);
+    //     writePageToPageBuffer();
+    //   } else if (pageWriter.getPointNumber()
+    //       >= valueCountInOnePageForNextCheck) { // need to check memory size
+    //     // not checking the memory used for every value
+    //     long currentPageSize = pageWriter.estimateMaxMemSize();
+    //     if (currentPageSize > pageSizeThreshold) { // memory size exceeds threshold
+    //       // we will write the current page
+    //       logger.debug(
+    //           "enough size, write page {}, pageSizeThreshold:{}, currentPateSize:{}, valueCountInOnePage:{}",
+    //           measurementSchema.getMeasurementId(),
+    //           pageSizeThreshold,
+    //           currentPageSize,
+    //           pageWriter.getPointNumber());
+    //       writePageToPageBuffer();
+    //       valueCountInOnePageForNextCheck = MINIMUM_RECORD_COUNT_FOR_CHECK;
+    //     } else {
+    //       // reset the valueCountInOnePageForNextCheck for the next page
+    //       valueCountInOnePageForNextCheck =
+    //           (int) (((float) pageSizeThreshold / currentPageSize) * pageWriter.getPointNumber());
+    //     }
+    //   }
+    // }
+    fn write_page_to_buffer(&mut self) {
+        match self.current_page_writer.as_mut() {
+            Some(page_writer) => {
+                page_writer.prepare_buffer();
+
+                let buffer_size: u32 = page_writer.buffer.len() as u32;
+
+                let uncompressed_bytes = buffer_size;
+                // We have no compression!
+                let compressed_bytes = uncompressed_bytes;
+
+                // TODO we need a change here if multiple pages exist
+                if self.num_pages == 0 {
+                    // Uncompressed size
+                    self.size_without_statistics += utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer) as usize;
+                    // Compressed size
+                    self.size_without_statistics += utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer) as usize;
+
+                    // Write page content
+                    self.page_buffer.write_all(&page_writer.buffer);
+                    &page_writer.buffer.clear();
+
+                    self.first_page_statistics = Some(page_writer.statistics.clone())
+                } else if self.num_pages == 1 {
+                    let temp = self.page_buffer.clone();
+                    self.page_buffer.clear();
+                    self.page_buffer.write_all(&temp[..self.size_without_statistics]);
+                    match &self.first_page_statistics {
+                        Some(stat) => stat.serialize(&mut self.page_buffer),
+                        _ => panic!("This should not happen!")
+                    };
+                    self.page_buffer.write_all(&temp[self.size_without_statistics..]);
+
+                    // Uncompressed size
+                    utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
+                    // Compressed size
+                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+                    // Write page content
+                    page_writer.statistics.serialize(&mut page_writer.buffer);
+                    self.page_buffer.write_all(&page_writer.buffer);
+                    &page_writer.buffer.clear();
+                    self.first_page_statistics = None;
+                } else {
+                    // Uncompressed size
+                    utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
+                    // Compressed size
+                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+                    // Write page content
+                    page_writer.statistics.serialize(&mut page_writer.buffer);
+                    self.page_buffer.write_all(&page_writer.buffer);
+                    &page_writer.buffer.clear();
+                }
+                self.num_pages += 1;
+                self.statistics.merge(&page_writer.statistics);
+                page_writer.reset();
+            }
+            _ => {}
+        };
     }
 }
 
@@ -207,34 +417,17 @@ impl ChunkWriter {
             offset_of_chunk_header: None,
             statistics: Statistics::new(data_type),
             current_page_writer: None,
-            page_buffer: vec![]
+            page_buffer: vec![],
+            num_pages: 0,
+            first_page_statistics: None,
+            value_count_in_one_page_for_next_check: 0,
+            size_without_statistics: 0,
         }
     }
 
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
         // Before we can write the header we have to serialize the current page
-        match self.current_page_writer.as_mut() {
-            Some(page_writer) => {
-                page_writer.prepare_buffer();
-
-                let buffer_size: u32 = page_writer.buffer.len() as u32;
-
-                let uncompressed_bytes = buffer_size;
-                // We have no compression!
-                let compressed_bytes = uncompressed_bytes;
-
-                // TODO we need a change here if multiple pages exist
-
-                // Uncompressed size
-                utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
-                // Compressed size
-                utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
-
-                // Write page content
-                self.page_buffer.write_all(&page_writer.buffer);
-            }
-            _ => {}
-        };
+        self.write_page_to_buffer();
 
         // Chunk Header
         // store offset for metadata

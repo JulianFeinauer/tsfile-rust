@@ -1,8 +1,9 @@
 use std::cmp::max;
 use std::io::Write;
-use crate::{PositionedWrite, utils};
+use crate::{IoTDBValue, PositionedWrite, utils};
+use crate::TSDataType;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
     PLAIN
 }
@@ -15,24 +16,68 @@ impl TSEncoding {
     }
 }
 
-pub trait Encoder<DataType> {
-    fn encode(&mut self, value: DataType);
+pub trait Encoder2 {
+    fn write(&mut self, value: &IoTDBValue);
+    fn get_max_byte_size(&self) -> u32;
     fn serialize(&mut self, buffer: &mut Vec<u8>);
+    fn reset(&mut self);
 }
 
-pub struct PlainIntEncoder<T> {
-    values: Vec<T>,
-}
-
-impl PositionedWrite for Vec<u8> {
-    fn get_position(&self) -> u64 {
-        todo!()
+impl dyn Encoder2 {
+    pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder2> {
+        match (data_type, encoding) {
+            (TSDataType::INT32, TSEncoding::PLAIN) => {
+                Box::new(PlainIntEncoder::<i32>::new())
+            }
+            (TSDataType::FLOAT, TSEncoding::PLAIN) => {
+                Box::new(PlainIntEncoder::<f32>::new())
+            }
+            (TSDataType::INT64, TSEncoding::PLAIN) => {
+                Box::new(PlainIntEncoder::<i64>::new())
+            }
+            _ => panic!("No Encoder implemented for ({:?}, {:?})", data_type, encoding)
+        }
     }
 }
 
-impl Encoder<i32> for PlainIntEncoder<i32> {
-    fn encode(&mut self, value: i32) {
-        self.values.push(value)
+pub struct PlainIntEncoder<T> {
+    pub(crate) values: Vec<T>,
+}
+
+impl<T> PlainIntEncoder<T> {
+    pub(crate) fn reset(&mut self) {
+        self.values.clear()
+    }
+}
+
+
+impl Encoder2 for PlainIntEncoder<f32> {
+    fn write(&mut self, value: &IoTDBValue) {
+        match value {
+            IoTDBValue::FLOAT(v) => self.values.push(*v),
+            _ => panic!("Something went wrong!")
+        }
+    }
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
+        for val in &self.values {
+            buffer.write_all(&val.to_be_bytes());
+        }
+    }
+    fn get_max_byte_size(&self) -> u32 {
+        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
+        (24 + self.values.len() * 8) as u32
+    }
+    fn reset(&mut self) {
+        self.values.clear()
+    }
+}
+
+impl Encoder2 for PlainIntEncoder<i32> {
+    fn write(&mut self, value: &IoTDBValue) {
+        match value {
+            IoTDBValue::INT(v) => self.values.push(*v),
+            _ => panic!("Something went wrong!")
+        }
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
         for val in &self.values {
@@ -40,28 +85,41 @@ impl Encoder<i32> for PlainIntEncoder<i32> {
             utils::write_var_i32(*val, buffer);
         }
     }
+
+    fn get_max_byte_size(&self) -> u32 {
+        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
+        (24 + self.values.len() * 8) as u32
+    }
+    fn reset(&mut self) {
+        self.values.clear()
+    }
 }
 
-
-impl Encoder<i64> for PlainIntEncoder<i64> {
-    fn encode(&mut self, value: i64) {
-        self.values.push(value)
+impl Encoder2 for PlainIntEncoder<i64> {
+    fn write(&mut self, value: &IoTDBValue) {
+        match value {
+            IoTDBValue::LONG(v) => self.values.push(*v),
+            _ => panic!("Something went wrong!")
+        }
     }
+
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
         for val in &self.values {
             buffer.write_all(&val.to_be_bytes());
         }
     }
+    fn get_max_byte_size(&self) -> u32 {
+        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
+        (24 + self.values.len() * 8) as u32
+    }
+    fn reset(&mut self) {
+        self.values.clear()
+    }
 }
 
-impl Encoder<f32> for PlainIntEncoder<f32> {
-    fn encode(&mut self, value: f32) {
-        self.values.push(value)
-    }
-    fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        for val in &self.values {
-            buffer.write_all(&val.to_be_bytes());
-        }
+impl PositionedWrite for Vec<u8> {
+    fn get_position(&self) -> u64 {
+        todo!()
     }
 }
 
@@ -78,7 +136,27 @@ pub struct TimeEncoder {
     min_delta: i64,
     previous_value: i64,
     values: Vec<i64>,
-    buffer: Vec<u8>
+    buffer: Vec<u8>,
+}
+
+impl TimeEncoder {
+    pub(crate) fn reset(&mut self) {
+        self.first_value = None;
+        self.min_delta = i64::MAX;
+        self.previous_value = i64::MAX;
+        self.values.clear();
+        self.buffer.clear();
+    }
+}
+
+impl TimeEncoder {
+    pub(crate) fn size(&self) -> u32 {
+        self.buffer.len() as u32
+    }
+    pub(crate) fn get_max_byte_size(&self) -> u32 {
+        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
+        (24 + self.values.len() * 8) as u32
+    }
 }
 
 impl TimeEncoder {
@@ -142,7 +220,6 @@ impl TimeEncoder {
             }
         }
     }
-
 }
 
 
@@ -153,7 +230,7 @@ impl TimeEncoder {
             min_delta: i64::MAX,
             previous_value: i64::MAX,
             values: vec![],
-            buffer: vec![]
+            buffer: vec![],
         }
     }
 
@@ -205,8 +282,8 @@ impl TimeEncoder {
     }
 }
 
-impl Encoder<i64> for TimeEncoder {
-    fn encode(&mut self, value: i64) {
+impl TimeEncoder {
+    pub(crate) fn encode(&mut self, value: i64) {
         match self.first_value {
             None => {
                 self.first_value = Some(value);
@@ -230,7 +307,7 @@ impl Encoder<i64> for TimeEncoder {
     }
 
     #[allow(unused_variables)]
-    fn serialize(&mut self, buffer: &mut Vec<u8>) {
+    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
         // Flush
         self.flush();
         // Copy internal buffer to out buffer
