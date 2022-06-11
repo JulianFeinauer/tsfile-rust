@@ -40,6 +40,9 @@ const MINIMAL_SIZE: i32 = 256;
 const MAXIMAL_HASH_FUNCTION_SIZE: i32 = 8;
 const SEEDS: [u8; 8] = [5, 7, 11, 19, 31, 37, 43, 59];
 
+const ONLY_ONE_PAGE_CHUNK_HEADER: u8 = 5;
+const CHUNK_HEADER: u8 = 1;
+
 #[allow(dead_code)]
 pub enum IoTDBValue {
     DOUBLE(f64),
@@ -668,32 +671,8 @@ impl Serializable for ChunkGroup<'_> {
     }
 }
 
-struct ChunkHeader<'a> {
-    measurement_id: &'a str,
-    data_size: u8,
-}
-
-impl ChunkHeader<'_> {
-    fn new<'a>(measurement_id: &str) -> ChunkHeader {
-        return ChunkHeader {
-            measurement_id,
-            data_size: 0x20,
-        };
-    }
-}
-
 pub trait Serializable {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()>;
-}
-
-struct Chunk<'a> {
-    header: ChunkHeader<'a>,
-}
-
-impl Serializable for Chunk<'_> {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
-        self.header.serialize(file)
-    }
 }
 
 fn write_str(file: &mut dyn PositionedWrite, s: &str) -> io::Result<()> {
@@ -704,22 +683,24 @@ fn write_str(file: &mut dyn PositionedWrite, s: &str) -> io::Result<()> {
     Ok(())
 }
 
-impl Serializable for ChunkHeader<'_> {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
-        // Chunk Header
-        file.write(&[5]).expect("write failed"); // Marker
-        write_str(file, &self.measurement_id);
-        // Data Lenght
-        file.write(&[self.data_size]).expect("write failed");
-        // Data Type INT32 -> 1
-        file.write(&[1]).expect("write failed");
-        // Compression Type UNCOMPRESSED -> 0
-        file.write(&[0]).expect("write failed");
-        // Encoding PLAIN -> 0
-        file.write(&[0]).expect("write failed");
-        Ok(())
-    }
-}
+// TODO delete asap
+// impl Serializable for ChunkHeader<'_> {
+//     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+//         // Chunk Header
+//         // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
+//         file.write(&[5]).expect("write failed"); // Marker
+//         write_str(file, &self.measurement_id);
+//         // Data Lenght
+//         file.write(&[self.data_size]).expect("write failed");
+//         // Data Type INT32 -> 1
+//         file.write(&[1]).expect("write failed");
+//         // Compression Type UNCOMPRESSED -> 0
+//         file.write(&[0]).expect("write failed");
+//         // Encoding PLAIN -> 0
+//         file.write(&[0]).expect("write failed");
+//         Ok(())
+//     }
+// }
 
 #[warn(dead_code)]
 pub fn write_file_3() {
@@ -753,29 +734,6 @@ pub fn write_file_3() {
     TsFileWriter::flush(&mut writer);
 
     ()
-}
-
-#[warn(dead_code)]
-fn write_file_2() {
-    std::fs::remove_file("data2.tsfile");
-
-    let mut file = WriteWrapper::new(File::create("data2.tsfile").expect("create failed"));
-    let version: [u8; 1] = [3];
-
-    // Header
-    file.write("TsFile".as_bytes()).expect("write failed");
-    file.write(&version).expect("write failed");
-    // End of Header
-
-    let cg = ChunkGroup {
-        header: ChunkGroupHeader { device_id: "d1" },
-    };
-
-    &cg.serialize(&mut file);
-
-    // Create ChunkHeader
-    let header = ChunkHeader::new("s1");
-    header.serialize(&mut file).expect("")
 }
 
 #[warn(dead_code)]
@@ -823,7 +781,7 @@ mod tests {
     use crate::tsfile_writer::TsFileWriter;
     use crate::utils::{read_var_u32, write_var_u32};
     use crate::{
-        write_file, write_file_2, write_file_3, IoTDBValue, MeasurementGroup, MeasurementSchema,
+        write_file, write_file_3, IoTDBValue, MeasurementGroup, MeasurementSchema,
         Path, Schema, TSDataType, WriteWrapper,
     };
 
@@ -836,11 +794,6 @@ mod tests {
     #[test]
     fn write_file_test() {
         write_file()
-    }
-
-    #[test]
-    fn write_file_test_2() {
-        write_file_2()
     }
 
     #[test]
@@ -1509,16 +1462,18 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let mut writer = TsFileWriter::new("10000_int64.tsfile", schema);
 
         for i in 0..10001 {
-            writer.write("d1", "s", i, IoTDBValue::LONG(i));
+            writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
         }
 
-        let buffer: Vec<u8> = vec![];
+        writer.flush();
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
-
-        writer._flush(&mut buffer_writer);
+        // let buffer: Vec<u8> = vec![];
+        //
+        // let mut buffer_writer = WriteWrapper::new(buffer);
+        //
+        // writer._flush(&mut buffer_writer);
     }
 }

@@ -2,10 +2,7 @@ use crate::encoding::Encoder2;
 use crate::encoding::{PlainIntEncoder, TimeEncoder};
 use crate::statistics::Statistics;
 use crate::TSDataType::FLOAT;
-use crate::{
-    utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType,
-    TSEncoding,
-};
+use crate::{utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType, TSEncoding, ONLY_ONE_PAGE_CHUNK_HEADER, CHUNK_HEADER};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
@@ -378,22 +375,36 @@ impl ChunkWriter {
                 } else if self.num_pages == 1 {
                     let temp = self.page_buffer.clone();
                     self.page_buffer.clear();
+
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    let header_bytes = &temp[0..self.size_without_statistics];
                     self.page_buffer
-                        .write_all(&temp[..self.size_without_statistics]);
+                        .write_all(&header_bytes);
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
                     match &self.first_page_statistics {
                         Some(stat) => stat.serialize(&mut self.page_buffer),
                         _ => panic!("This should not happen!"),
                     };
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    let remainder_bytes = &temp[self.size_without_statistics..];
                     self.page_buffer
-                        .write_all(&temp[self.size_without_statistics..]);
-
+                        .write_all(&remainder_bytes);
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Uncompressed size
                     utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
                     // Compressed size
                     utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Write page content
-                    page_writer.statistics.serialize(&mut page_writer.buffer);
+                    println!("Statistics: {:?}", &page_writer.statistics);
+                    page_writer.statistics.serialize(&mut self.page_buffer);
+
+                    println!("Flushing page at page buffer offset {}", self.page_buffer.get_position());
+
                     self.page_buffer.write_all(&page_writer.buffer);
+
+                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+
                     &page_writer.buffer.clear();
                     self.first_page_statistics = None;
                 } else {
@@ -447,7 +458,15 @@ impl ChunkWriter {
         // store offset for metadata
         self.offset_of_chunk_header = Some(file.get_position());
 
-        file.write(&[5]).expect("write failed"); // Marker
+        // Marker
+        // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
+        let marker = if self.num_pages <= 1 {
+            ONLY_ONE_PAGE_CHUNK_HEADER
+        } else {
+            CHUNK_HEADER
+        };
+        let marker = marker | self.mask;
+        file.write(&[marker]).expect("write failed"); // Marker
 
         write_str(file, self.measurement_id.as_str());
         // Data Lenght
@@ -463,8 +482,12 @@ impl ChunkWriter {
             .expect("write failed");
         // End Chunk Header
 
+        println!("Dumping pages at offset {}", file.get_position());
+
         // Write the full page
         file.write_all(&self.page_buffer);
+
+        println!("Offset after {}", file.get_position());
     }
 
     pub(crate) fn get_metadata(&self) -> ChunkMetadata {

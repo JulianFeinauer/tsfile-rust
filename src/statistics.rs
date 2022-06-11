@@ -3,7 +3,7 @@ use std::io;
 use crate::Statistics::INT32;
 use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Statistics {
     INT32(StatisticsStruct<i32, i64>),
     INT64(StatisticsStruct<i64, f64>),
@@ -66,7 +66,7 @@ impl Serializable for Statistics {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct StatisticsStruct<T, S> {
     ts_first: i64,
     ts_last: i64,

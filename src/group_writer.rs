@@ -1,5 +1,5 @@
 use crate::chunk_writer::ChunkWriter;
-use crate::{Chunk, ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
+use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::HashMap;
 use std::io::Write;
 

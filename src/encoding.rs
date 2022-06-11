@@ -115,7 +115,7 @@ impl Encoder2 for PlainIntEncoder<i64> {
 
 impl PositionedWrite for Vec<u8> {
     fn get_position(&self) -> u64 {
-        todo!()
+        self.len() as u64
     }
 }
 
