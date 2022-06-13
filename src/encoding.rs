@@ -16,15 +16,15 @@ impl TSEncoding {
     }
 }
 
-pub trait Encoder2 {
+pub trait Encoder {
     fn write(&mut self, value: &IoTDBValue);
     fn get_max_byte_size(&self) -> u32;
     fn serialize(&mut self, buffer: &mut Vec<u8>);
     fn reset(&mut self);
 }
 
-impl dyn Encoder2 {
-    pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder2> {
+impl dyn Encoder {
+    pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder> {
         match (data_type, encoding) {
             (TSDataType::INT32, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i32>::new()),
             (TSDataType::FLOAT, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<f32>::new()),
@@ -47,7 +47,7 @@ impl<T> PlainIntEncoder<T> {
     }
 }
 
-impl Encoder2 for PlainIntEncoder<f32> {
+impl Encoder for PlainIntEncoder<f32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::FLOAT(v) => self.values.push(*v),
@@ -68,7 +68,7 @@ impl Encoder2 for PlainIntEncoder<f32> {
     }
 }
 
-impl Encoder2 for PlainIntEncoder<i32> {
+impl Encoder for PlainIntEncoder<i32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::INT(v) => self.values.push(*v),
@@ -91,7 +91,7 @@ impl Encoder2 for PlainIntEncoder<i32> {
     }
 }
 
-impl Encoder2 for PlainIntEncoder<i64> {
+impl Encoder for PlainIntEncoder<i64> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
             IoTDBValue::LONG(v) => self.values.push(*v),

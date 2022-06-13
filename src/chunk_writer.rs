@@ -1,4 +1,4 @@
-use crate::encoding::Encoder2;
+use crate::encoding::Encoder;
 use crate::encoding::{PlainIntEncoder, TimeEncoder};
 use crate::statistics::Statistics;
 use crate::TSDataType::FLOAT;
@@ -12,203 +12,9 @@ const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
 const PAGE_SIZE_THRESHOLD: u32 = 65536;
 const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
-// pub enum TypedEncoder {
-//     Int(IntEncoder),
-//     Long(LongEncoder),
-//     Float(FloatEncoder)
-// }
-//
-// impl TypedEncoder {
-//     pub(crate) fn reset(&mut self) {
-//         match self {
-//             TypedEncoder::Int(encoder) => encoder.reset(),
-//             TypedEncoder::Long(encoder) => encoder.reset(),
-//             TypedEncoder::Float(encoder) => encoder.reset()
-//         }
-//     }
-// }
-//
-// impl TypedEncoder {
-//     pub(crate) fn get_max_byte_size(&self) -> u32 {
-//         match self {
-//             TypedEncoder::Int(encoder) => encoder.get_max_byte_size(),
-//             TypedEncoder::Long(encoder) => encoder.get_max_byte_size(),
-//             TypedEncoder::Float(encoder) => encoder.get_max_byte_size()
-//         }
-//     }
-// }
-//
-// impl TypedEncoder {
-//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-//         match self {
-//             TypedEncoder::Int(encoder) => encoder.serialize(buffer),
-//             TypedEncoder::Long(encoder) => encoder.serialize(buffer),
-//             TypedEncoder::Float(encoder) => encoder.serialize(buffer)
-//         }
-//     }
-//
-//     pub(crate) fn write(&mut self, value: &IoTDBValue) -> Result<(), &str> {
-//         match (self, value) {
-//             (Int(encoder), IoTDBValue::INT(i)) => encoder.write(*i),
-//             (Long(encoder), IoTDBValue::LONG(i)) => encoder.write(*i),
-//             (Float(encoder), IoTDBValue::FLOAT(i)) => encoder.write(*i),
-//             (_, _) => panic!("Something went terribly wrong here!")
-//         }
-//     }
-//
-//     fn new(data_type: TSDataType, encoding: TSEncoding) -> TypedEncoder {
-//         match data_type {
-//             TSDataType::INT32 => TypedEncoder::Int(IntEncoder::new(encoding)),
-//             TSDataType::INT64 => TypedEncoder::Long(LongEncoder::new(encoding)),
-//             TSDataType::FLOAT => TypedEncoder::Float(FloatEncoder::new(encoding)),
-//             _ => panic!("No Encoder for data type {:?}", data_type)
-//         }
-//     }
-// }
-//
-// pub enum IntEncoder {
-//     Plain(PlainIntEncoder<i32>)
-// }
-//
-// impl IntEncoder {
-//     pub(crate) fn reset(&self) {
-//         todo!()
-//     }
-// }
-//
-// impl IntEncoder {
-//     pub(crate) fn get_max_byte_size(&self) -> u32 {
-//         todo!()
-//     }
-// }
-//
-// impl IntEncoder {
-//     pub(crate) fn write(&mut self, value: i32) -> Result<(), &str> {
-//         match self {
-//             IntEncoder::Plain(encoder) => {
-//                 encoder.encode(value);
-//                 Ok(())
-//             }
-//         }
-//     }
-//
-//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-//         match self {
-//             IntEncoder::Plain(encoder) => {
-//                 encoder.serialize(buffer);
-//             }
-//         }
-//     }
-//
-//     fn new(encoding: TSEncoding) -> IntEncoder {
-//         match encoding {
-//             TSEncoding::PLAIN => {
-//                 IntEncoder::Plain(PlainIntEncoder::<i32>::new())
-//             }
-//         }
-//     }
-// }
-//
-// pub enum LongEncoder {
-//     Plain(PlainIntEncoder<i64>)
-// }
-//
-// impl LongEncoder {
-//     pub(crate) fn reset(&mut self) {
-//         match self {
-//             LongEncoder::Plain(encoder) => encoder.reset()
-//         }
-//     }
-// }
-//
-// impl LongEncoder {
-//     pub(crate) fn get_max_byte_size(&self) -> u32 {
-//         match self {
-//             LongEncoder::Plain(encoder) => encoder.get_max_byte_size(),
-//         }
-//     }
-// }
-//
-// impl LongEncoder {
-//     pub(crate) fn size(&self) -> u32 {
-//         todo!()
-//     }
-// }
-//
-// impl LongEncoder {
-//     pub(crate) fn write(&mut self, value: i64) -> Result<(), &str> {
-//         match self {
-//             LongEncoder::Plain(encoder) => {
-//                 encoder.encode(value);
-//                 Ok(())
-//             }
-//         }
-//     }
-//
-//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-//         match self {
-//             LongEncoder::Plain(encoder) => {
-//                 encoder.serialize(buffer);
-//             }
-//         }
-//     }
-//
-//     fn new(encoding: TSEncoding) -> LongEncoder {
-//         match encoding {
-//             TSEncoding::PLAIN => {
-//                 LongEncoder::Plain(PlainIntEncoder::<i64>::new())
-//             }
-//         }
-//     }
-// }
-//
-// pub enum FloatEncoder {
-//     Plain(PlainIntEncoder<f32>)
-// }
-//
-// impl FloatEncoder {
-//     pub(crate) fn reset(&self) {
-//         todo!()
-//     }
-// }
-//
-// impl FloatEncoder {
-//     pub(crate) fn size(&self) -> u32 {
-//         todo!()
-//     }
-//     pub(crate) fn get_max_byte_size(&self) -> u32 {
-//         todo!()
-//     }
-// }
-//
-// impl FloatEncoder {
-//     fn new(encoding: TSEncoding) -> FloatEncoder {
-//         match encoding {
-//             TSEncoding::PLAIN => FloatEncoder::Plain(PlainIntEncoder::new())
-//         }
-//     }
-//
-//     pub(crate) fn write(&mut self, value: f32) -> Result<(), &str> {
-//         match self {
-//             FloatEncoder::Plain(encoder) => {
-//                 encoder.encode(value);
-//                 Ok(())
-//             }
-//         }
-//     }
-//
-//     pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-//         match self {
-//             FloatEncoder::Plain(encoder) => {
-//                 encoder.serialize(buffer);
-//             }
-//         }
-//     }
-// }
-
 struct PageWriter {
     time_encoder: TimeEncoder,
-    value_encoder: Box<dyn Encoder2>,
+    value_encoder: Box<dyn Encoder>,
     data_type: TSDataType,
     statistics: Statistics,
     point_number: u32,
@@ -238,7 +44,7 @@ impl PageWriter {
     fn new(data_type: TSDataType, encoding: TSEncoding) -> PageWriter {
         PageWriter {
             time_encoder: TimeEncoder::new(),
-            value_encoder: <dyn Encoder2>::new(data_type, encoding),
+            value_encoder: <dyn Encoder>::new(data_type, encoding),
             data_type,
             statistics: Statistics::new(data_type),
             buffer: vec![],
