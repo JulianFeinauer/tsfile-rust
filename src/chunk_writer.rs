@@ -376,34 +376,34 @@ impl ChunkWriter {
                     let temp = self.page_buffer.clone();
                     self.page_buffer.clear();
 
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let header_bytes = &temp[0..self.size_without_statistics];
                     self.page_buffer
                         .write_all(&header_bytes);
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     match &self.first_page_statistics {
                         Some(stat) => stat.serialize(&mut self.page_buffer),
                         _ => panic!("This should not happen!"),
                     };
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let remainder_bytes = &temp[self.size_without_statistics..];
                     self.page_buffer
                         .write_all(&remainder_bytes);
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Uncompressed size
                     utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
                     // Compressed size
                     utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Write page content
-                    println!("Statistics: {:?}", &page_writer.statistics);
+                    log::trace!("Statistics: {:?}", &page_writer.statistics);
                     page_writer.statistics.serialize(&mut self.page_buffer);
 
-                    println!("Flushing page at page buffer offset {}", self.page_buffer.get_position());
+                    log::trace!("Flushing page at page buffer offset {}", self.page_buffer.get_position());
 
                     self.page_buffer.write_all(&page_writer.buffer);
 
-                    println!("Page Buffer offset: {}", self.page_buffer.get_position());
+                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
 
                     &page_writer.buffer.clear();
                     self.first_page_statistics = None;
@@ -482,12 +482,12 @@ impl ChunkWriter {
             .expect("write failed");
         // End Chunk Header
 
-        println!("Dumping pages at offset {}", file.get_position());
+        log::trace!("Dumping pages at offset {}", file.get_position());
 
         // Write the full page
         file.write_all(&self.page_buffer);
 
-        println!("Offset after {}", file.get_position());
+        log::trace!("Offset after {}", file.get_position());
     }
 
     pub(crate) fn get_metadata(&self) -> ChunkMetadata {

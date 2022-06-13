@@ -1,5 +1,4 @@
 #![allow(unused_must_use)]
-
 extern crate core;
 
 use std::collections::HashMap;
@@ -30,6 +29,7 @@ mod statistics;
 mod test;
 mod tsfile_writer;
 mod utils;
+mod benchmark;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
