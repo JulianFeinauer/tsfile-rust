@@ -18,6 +18,24 @@ pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
     return position;
 }
 
+pub fn size_var_i32(num: i32) -> u8 {
+    let mut u_value = num << 1;
+    if num < 0 {
+        u_value = !u_value;
+    }
+    return size_var_u32(u_value as u32);
+}
+
+pub fn size_var_u32(num: u32) -> u8 {
+    let mut position = 1;
+    let mut value = num.clone();
+    while (value & 0xFFFFFF80) != 0 {
+      value = value >> 7;
+      position += 1;
+    }
+    return position;
+}
+
 pub fn write_var_i32(num: i32, buffer: &mut dyn PositionedWrite) -> u8 {
     let mut u_value = num << 1;
     if num < 0 {
@@ -44,6 +62,3 @@ pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     return value | ((b as u32) << i);
 }
 
-pub(crate) fn write_var_i64(value: i64, buffer: &mut Vec<u8>) {
-    todo!()
-}

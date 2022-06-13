@@ -2,6 +2,7 @@ use crate::TSDataType;
 use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
+use crate::utils::{size_var_i32, size_var_u32};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
@@ -18,6 +19,7 @@ impl TSEncoding {
 
 pub trait Encoder {
     fn write(&mut self, value: &IoTDBValue);
+    fn size(&mut self) -> u32;
     fn get_max_byte_size(&self) -> u32;
     fn serialize(&mut self, buffer: &mut Vec<u8>);
     fn reset(&mut self);
@@ -66,6 +68,10 @@ impl Encoder for PlainIntEncoder<f32> {
     fn reset(&mut self) {
         self.values.clear()
     }
+
+    fn size(&mut self) -> u32 {
+        (&self.values.len() * 4) as u32
+    }
 }
 
 impl Encoder for PlainIntEncoder<i32> {
@@ -89,6 +95,14 @@ impl Encoder for PlainIntEncoder<i32> {
     fn reset(&mut self) {
         self.values.clear()
     }
+
+    fn size(&mut self) -> u32 {
+        let mut buffer_size: u32 = 0;
+        for v in &self.values {
+            buffer_size += size_var_i32(*v) as u32;
+        }
+        return buffer_size
+    }
 }
 
 impl Encoder for PlainIntEncoder<i64> {
@@ -106,10 +120,16 @@ impl Encoder for PlainIntEncoder<i64> {
     }
     fn get_max_byte_size(&self) -> u32 {
         // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        (24 + self.values.len() * 8) as u32
+        // (24 + self.values.len() * 8) as u32
+        // TODO why is this?
+        0
     }
     fn reset(&mut self) {
         self.values.clear()
+    }
+
+    fn size(&mut self) -> u32 {
+        (&self.values.len() * 8) as u32
     }
 }
 

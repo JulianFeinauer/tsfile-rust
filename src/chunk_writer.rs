@@ -27,16 +27,22 @@ impl PageWriter {
         self.statistics = Statistics::new(self.data_type);
         self.time_encoder.reset();
         self.value_encoder.reset();
+        self.point_number = 0;
     }
 }
 
 impl PageWriter {
-    pub(crate) fn estimate_max_mem_size(&self) -> u32 {
-        return self.time_encoder.size()
-            // currently always 0
-            // + self.value_encoder.size()
-            + self.time_encoder.get_max_byte_size()
-            + self.value_encoder.get_max_byte_size();
+    pub(crate) fn estimate_max_mem_size(&mut self) -> u32 {
+        let time_encoder_size = self.time_encoder.size();
+        let value_encoder_size = self.value_encoder.size();
+        let time_encoder_max_size = self.time_encoder.get_max_byte_size();
+        let value_encoder_max_size = self.value_encoder.get_max_byte_size();
+        let max_size = time_encoder_size
+            + value_encoder_size
+            + time_encoder_max_size
+            + value_encoder_max_size;
+        log::trace!("Max size estimated for page writer: {}", max_size);
+        return max_size;
     }
 }
 
@@ -62,6 +68,7 @@ impl PageWriter {
 
     pub(crate) fn prepare_buffer(&mut self) {
         // serialize time_encoder and value encoder
+        self.buffer.clear();
         let mut time_buffer = vec![];
         self.time_encoder.serialize(&mut time_buffer);
         crate::write_var_u32(time_buffer.len() as u32, &mut self.buffer);
@@ -84,6 +91,30 @@ pub struct ChunkWriter {
     first_page_statistics: Option<Statistics>,
     value_count_in_one_page_for_next_check: u32,
     size_without_statistics: usize,
+}
+
+impl ChunkWriter {
+    pub(crate) fn estimate_max_series_mem_size(&mut self) -> u32 {
+        // return pageBuffer.size()
+        // + pageWriter.estimateMaxMemSize()
+        // + PageHeader.estimateMaxPageHeaderSizeWithoutStatistics()
+        // + pageWriter.getStatistics().getSerializedSize();
+        match &mut self.current_page_writer {
+            Some(pw) => {
+                let pw_mem_size = pw.estimate_max_mem_size();
+                let stat_size = 2 * (4 + 1) + pw.statistics.get_serialized_size();
+                let size = self.page_buffer.len() as u32 +
+                    pw_mem_size +
+                    // Header size
+                    stat_size;
+                println!("Estimated max series mem size: {}", size);
+                size
+            },
+            None => {
+                0
+            }
+        }
+    }
 }
 
 impl ChunkWriter {
@@ -110,13 +141,19 @@ impl ChunkWriter {
         if self.current_page_writer.is_none() {
             return;
         }
-        let page_writer = self.current_page_writer.as_ref().unwrap();
+        let page_writer = self.current_page_writer.as_mut().unwrap();
         if page_writer.point_number > MAX_NUMBER_OF_POINTS_IN_PAGE {
             self.write_page_to_buffer();
         } else if page_writer.point_number >= VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK {
             let current_page_size = page_writer.estimate_max_mem_size();
 
             if current_page_size > PAGE_SIZE_THRESHOLD {
+                println!(
+            "enough size, write page {}, pageSizeThreshold:{}, currentPateSize:{}, valueCountInOnePage:{}",
+            self.measurement_id.clone(),
+            PAGE_SIZE_THRESHOLD,
+            current_page_size,
+            page_writer.point_number);
                 self.write_page_to_buffer();
                 self.value_count_in_one_page_for_next_check = MINIMUM_RECORD_COUNT_FOR_CHECK;
             } else {
@@ -221,6 +258,7 @@ impl ChunkWriter {
                     // Write page content
                     page_writer.statistics.serialize(&mut page_writer.buffer);
                     self.page_buffer.write_all(&page_writer.buffer);
+                    println!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
                     &page_writer.buffer.clear();
                 }
                 self.num_pages += 1;

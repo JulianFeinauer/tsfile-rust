@@ -11,8 +11,9 @@ use std::io::Write;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
-pub struct TsFileWriter {
+pub struct TsFileWriter<T: PositionedWrite> {
     filename: String,
+    pub(crate) file_writer: T,
     group_writers: HashMap<Path, GroupWriter>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
@@ -20,7 +21,7 @@ pub struct TsFileWriter {
     record_count_for_next_mem_check: u32,
 }
 
-impl TsFileWriter {
+impl<T: PositionedWrite> TsFileWriter<T> {
     pub(crate) fn write(
         &mut self,
         device: &str,
@@ -33,26 +34,33 @@ impl TsFileWriter {
         };
         match self.group_writers.get_mut(&device) {
             Some(group) => {
-                return group.write(String::from(measurement_id), timestamp, value);
+                group.write(String::from(measurement_id), timestamp, value);
+                // TODO fetch from write operation
+                self.record_count += 1;
             }
             None => {
                 return Err("Unable to find group writer");
             }
         }
+        self.check_memory_size_and_may_flush_chunks();
+        Ok(())
     }
 
     fn check_memory_size_and_may_flush_chunks(&mut self) -> bool {
         if self.record_count >= self.record_count_for_next_mem_check {
             let mem_size = self.calculate_mem_size_for_all_groups();
-            if (mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE) {
+            println!("Memcount calculated: {}", mem_size);
+            println!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
+            if mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE {
                 self.record_count_for_next_mem_check = self.record_count_for_next_mem_check
-                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE
-                    / mem_size;
+                    * (CHUNK_GROUP_SIZE_THRESHOLD_BYTE / mem_size);
                 return self.flush_all_chunk_groups();
             } else {
-                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check
-                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE
-                    / mem_size;
+                // println!("Record Count: {}, CHUNK_GROUP_SIZE_THRESHOLD_BYTE: {}, memsize: {}", self.record_count_for_next_mem_check, CHUNK_GROUP_SIZE_THRESHOLD_BYTE, mem_size);
+                // in the java impl there can be an overflow...
+                self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
+                println!("Next record count for check {}", self.record_count_for_next_mem_check);
                 return false;
             }
         }
@@ -60,6 +68,55 @@ impl TsFileWriter {
     }
 
     fn flush_all_chunk_groups(&mut self) -> bool {
+        if self.record_count > 0 {
+            for (device_id, group_writer) in self.group_writers.iter_mut() {
+                // self.file_writer.start_chunk_group(device_id);
+                // self.file_writer
+            }
+        }
+        // if (recordCount > 0) {
+        //   for (Map.Entry<String, IChunkGroupWriter> entry : groupWriters.entrySet()) {
+        //     String deviceId = entry.getKey();
+        //     IChunkGroupWriter groupWriter = entry.getValue();
+        //     fileWriter.startChunkGroup(deviceId);
+        //     long pos = fileWriter.getPos();
+        //     long dataSize = groupWriter.flushToFileWriter(fileWriter);
+        //     if (fileWriter.getPos() - pos != dataSize) {
+        //       throw new IOException(
+        //           String.format(
+        //               "Flushed data size is inconsistent with computation! Estimated: %d, Actual: %d",
+        //               dataSize, fileWriter.getPos() - pos));
+        //     }
+        //     fileWriter.endChunkGroup();
+        //     if (groupWriter instanceof AlignedChunkGroupWriterImpl) {
+        //       // add flushed measurements
+        //       List<String> measurementList =
+        //           flushedMeasurementsInDeviceMap.computeIfAbsent(deviceId, p -> new ArrayList<>());
+        //       ((AlignedChunkGroupWriterImpl) groupWriter)
+        //           .getMeasurements()
+        //           .forEach(
+        //               measurementId -> {
+        //                 if (!measurementList.contains(measurementId)) {
+        //                   measurementList.add(measurementId);
+        //                 }
+        //               });
+        //       // add lastTime
+        //       if (!isUnseq) { // Sequence TsFile
+        //         this.alignedDeviceLastTimeMap.put(
+        //             deviceId, ((AlignedChunkGroupWriterImpl) groupWriter).getLastTime());
+        //       }
+        //     } else {
+        //       // add lastTime
+        //       if (!isUnseq) { // Sequence TsFile
+        //         this.nonAlignedTimeseriesLastTimeMap.put(
+        //             deviceId, ((NonAlignedChunkGroupWriterImpl) groupWriter).getLastTimeMap());
+        //       }
+        //     }
+        //   }
+        //   reset();
+        // }
+        // return false;
+        todo!("Unable to flush yet!");
         true
     }
 
@@ -70,7 +127,7 @@ impl TsFileWriter {
         // }
         // return memTotalSize;
         let mut mem_total_size = 0_u32;
-        for group in self.group_writers.values() {
+        for (_, group) in self.group_writers.iter_mut() {
             mem_total_size += group.update_max_group_mem_size();
         }
         mem_total_size
@@ -78,7 +135,6 @@ impl TsFileWriter {
 
     fn flush_metadata_index(
         &mut self,
-        file: &mut dyn PositionedWrite,
         chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>,
     ) -> MetadataIndexNode {
         for (path, metadata) in chunk_metadata_list {
@@ -133,25 +189,25 @@ impl TsFileWriter {
                 .push(Box::new(timeseries_metadata));
         }
 
-        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, file);
+        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.file_writer);
     }
 
     #[allow(unused_variables)]
-    pub(crate) fn _flush<'b>(&mut self, file: &'b mut dyn PositionedWrite) -> Result<(), &str> {
+    pub(crate) fn flush<'b>(&mut self) -> Result<(), &str> {
         // Start to write to file
         // Header
         // let mut file = File::create(self.filename).expect("create failed");
         let version: [u8; 1] = [3];
 
         // Header
-        file.write("TsFile".as_bytes()).expect("write failed");
-        file.write(&version).expect("write failed");
+        self.file_writer.write("TsFile".as_bytes()).expect("write failed");
+        self.file_writer.write(&version).expect("write failed");
         // End of Header
 
         // Now iterate the
         for (_, group_writer) in self.group_writers.iter_mut() {
             // Write the group
-            group_writer.serialize(file);
+            group_writer.serialize(&mut self.file_writer);
         }
         // Statistics
         // Fetch all metadata
@@ -183,18 +239,18 @@ impl TsFileWriter {
         }
 
         // Get meta offset
-        let meta_offset = file.get_position();
+        let meta_offset = self.file_writer.get_position();
 
         // Write Marker 0x02
-        file.write_all(&[0x02]);
+        self.file_writer.write_all(&[0x02]);
 
-        let metadata_index_node = self.flush_metadata_index(file, &chunk_metadata_map);
+        let metadata_index_node = self.flush_metadata_index(&chunk_metadata_map);
 
         let ts_file_metadata = TsFileMetadata::new(Some(metadata_index_node), meta_offset);
 
-        let footer_index = file.get_position();
+        let footer_index = self.file_writer.get_position();
 
-        ts_file_metadata.serialize(file);
+        ts_file_metadata.serialize(&mut self.file_writer);
 
         // Now serialize the Bloom Filter ?!
 
@@ -206,26 +262,31 @@ impl TsFileWriter {
 
         let bloom_filter = BloomFilter::build(paths);
 
-        bloom_filter.serialize(file);
+        bloom_filter.serialize(&mut self.file_writer);
 
-        let size_of_footer = (file.get_position() - footer_index) as u32;
+        let size_of_footer = (self.file_writer.get_position() - footer_index) as u32;
 
-        file.write_all(&size_of_footer.to_be_bytes());
+        self.file_writer.write_all(&size_of_footer.to_be_bytes());
 
         // Footer
-        file.write_all("TsFile".as_bytes());
+        self.file_writer.write_all("TsFile".as_bytes());
         Ok(())
-    }
-
-    pub(crate) fn flush(&mut self) -> Result<(), &str> {
-        let mut file =
-            WriteWrapper::new(File::create(self.filename.clone()).expect("create failed"));
-        self._flush(&mut file)
     }
 }
 
-impl TsFileWriter {
-    pub(crate) fn new(filename: &str, schema: Schema) -> TsFileWriter {
+impl TsFileWriter<WriteWrapper<File>> {
+    // "Default" constructor to use... writes to a file
+    pub(crate) fn new(filename: &str, schema: Schema) -> TsFileWriter<WriteWrapper<File>> {
+        let mut file =
+            WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
+
+        TsFileWriter::new_from_writer(filename, schema, file)
+    }
+}
+
+impl<T: PositionedWrite> TsFileWriter<T> {
+
+    pub(crate) fn new_from_writer(filename: &str, schema: Schema, file_writer: T) -> TsFileWriter<T> {
         let group_writers = schema
             .measurement_groups
             .into_iter()
@@ -256,6 +317,7 @@ impl TsFileWriter {
 
         TsFileWriter {
             filename: String::from(filename),
+            file_writer,
             group_writers,
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),

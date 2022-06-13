@@ -2,12 +2,24 @@ use std::io;
 
 use crate::Statistics::INT32;
 use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType};
+use crate::utils::size_var_u32;
 
 #[derive(Clone, Debug)]
 pub enum Statistics {
     INT32(StatisticsStruct<i32, i64>),
     INT64(StatisticsStruct<i64, f64>),
     FLOAT(StatisticsStruct<f32, f64>),
+}
+
+impl Statistics {
+    pub(crate) fn get_serialized_size(&self) -> u32 {
+        match self {
+            Statistics::INT32(s) => s.get_serialized_size(),
+            Statistics::INT64(s) => s.get_serialized_size(),
+            Statistics::FLOAT(s) => s.get_serialized_size(),
+            _ => todo!(),
+        }
+    }
 }
 
 impl Statistics {
@@ -75,8 +87,30 @@ pub struct StatisticsStruct<T, S> {
     max_value: T,
     first_value: T,
     last_value: T,
-    count: u64,
+    count: u32,
     sum_value: S,
+}
+
+impl StatisticsStruct<i64, f64> {
+    pub(crate) fn get_serialized_size(&self) -> u32 {
+        // return ReadWriteForEncodingUtils.uVarIntSize(count) // count
+        // + 16 // startTime, endTime
+        // + getStatsSize();
+        // 40 -> stat size for int
+        return size_var_u32(self.count) as u32 + 16 + 40;
+    }
+}
+
+impl StatisticsStruct<i32, i64> {
+    pub(crate) fn get_serialized_size(&self) -> u32 {
+        return size_var_u32(self.count) as u32 + 16 + 24;
+    }
+}
+
+impl StatisticsStruct<f32, f64> {
+    pub(crate) fn get_serialized_size(&self) -> u32 {
+        return size_var_u32(self.count) as u32 + 16 + 24;
+    }
 }
 
 #[macro_export]

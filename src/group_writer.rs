@@ -9,18 +9,14 @@ pub struct GroupWriter {
 }
 
 impl GroupWriter {
-    pub(crate) fn update_max_group_mem_size(&self) -> u32 {
-        // long bufferSize = 0;
-        // for (IChunkWriter seriesWriter : chunkWriters.values()) {
-        //   bufferSize += seriesWriter.estimateMaxSeriesMemSize();
-        // }
-        // return bufferSize;
-        // let mut buffer_size = 0;
-        // for series_writer in self.chunk_writers.values() {
-        //     buffer_size += series_writer.estimate_max_series_mem_size();
-        // }
-        // buffer_size
-        0
+    pub(crate) fn update_max_group_mem_size(&mut self) -> u32 {
+        let mut buffer_size = 0;
+        for (_, chunk_writer) in self.chunk_writers.iter_mut() {
+            let chunk_writer_size = chunk_writer.estimate_max_series_mem_size();
+            println!("Chunk Writer Size: {} for series {}", chunk_writer_size, chunk_writer.measurement_id);
+            buffer_size += chunk_writer_size;
+        }
+        buffer_size
     }
 }
 

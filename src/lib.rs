@@ -731,8 +731,6 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, "d1", "s1", 1000, IoTDBValue::INT(16));
     TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
 
-    TsFileWriter::flush(&mut writer);
-
     ()
 }
 
@@ -835,17 +833,19 @@ mod tests {
         let schema = Schema {
             measurement_groups: measurement_groups_map,
         };
-        let mut writer = TsFileWriter::new("data3.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data3.tsfile", schema, buffer_writer);
 
         TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
         TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
         TsFileWriter::write(&mut writer, "d1", "s1", 100, IoTDBValue::INT(15));
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        writer.flush();
 
-        writer._flush(&mut buffer_writer);
+        let buffer_writer = writer.file_writer;
 
         assert_eq!(buffer_writer.writer, expectation);
         assert_eq!(buffer_writer.position, 203);
@@ -1088,7 +1088,10 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer);
 
         writer.write("d1", "s1", 1, IoTDBValue::INT(13));
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
@@ -1096,14 +1099,11 @@ mod tests {
 
         // writer.flush();
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
-
-        writer._flush(&mut buffer_writer);
+        writer.flush();
 
         // assert_eq!(buffer_writer.writer, expected);
-        assert_eq!(buffer_writer.position, expected.len() as u64);
+        assert_eq!(writer.file_writer.position, expected.len() as u64);
     }
 
     #[test]
@@ -1139,17 +1139,17 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer);
 
         writer.write("d1", "s", 1, IoTDBValue::INT(13));
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        writer.flush();
 
-        writer._flush(&mut buffer_writer);
-
-        assert_eq!(buffer_writer.writer, expected);
+        assert_eq!(writer.file_writer.writer, expected);
     }
 
     #[test]
@@ -1187,17 +1187,17 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer);
 
         writer.write("d1", "s", 1, IoTDBValue::LONG(13));
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        writer.flush();
 
-        writer._flush(&mut buffer_writer);
-
-        assert_eq!(buffer_writer.writer, expected);
+        assert_eq!(writer.file_writer.writer, expected);
     }
 
     #[test]
@@ -1234,17 +1234,17 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer);
 
         writer.write("d1", "s", 1, IoTDBValue::FLOAT(13.0));
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        writer.flush();
 
-        writer._flush(&mut buffer_writer);
-
-        assert_eq!(buffer_writer.writer, expected);
+        assert_eq!(writer.file_writer.writer, expected);
     }
 
     #[test]
@@ -1431,19 +1431,19 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("data123.tsfile", schema);
+        let buffer: Vec<u8> = vec![];
+        let mut buffer_writer = WriteWrapper::new(buffer);
+
+        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer);
 
         for i in 0..1001 {
             writer.write("d1", "s", i, IoTDBValue::INT(i as i32));
         }
 
-        let buffer: Vec<u8> = vec![];
 
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        writer.flush();
 
-        writer._flush(&mut buffer_writer);
-
-        assert_eq!(buffer_writer.writer, expected);
+        assert_eq!(writer.file_writer.writer, expected);
     }
 
     #[test]
