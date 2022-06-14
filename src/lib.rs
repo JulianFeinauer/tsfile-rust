@@ -30,6 +30,7 @@ mod test;
 mod tsfile_writer;
 mod utils;
 mod benchmark;
+mod tsfile_io_writer;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
@@ -649,8 +650,16 @@ impl Serializable for TsFileMetadata {
     }
 }
 
-struct ChunkGroupHeader<'a> {
+pub struct ChunkGroupHeader<'a> {
     device_id: &'a str,
+}
+
+impl<'a> ChunkGroupHeader<'a> {
+    fn new(device_id: &'a str) -> ChunkGroupHeader<'a> {
+        ChunkGroupHeader {
+            device_id
+        }
+    }
 }
 
 impl Serializable for ChunkGroupHeader<'_> {
@@ -845,7 +854,7 @@ mod tests {
 
         writer.flush();
 
-        let buffer_writer = writer.file_writer;
+        let buffer_writer = writer.file_io_writer.out;
 
         assert_eq!(buffer_writer.writer, expectation);
         assert_eq!(buffer_writer.position, 203);
@@ -1097,13 +1106,10 @@ mod tests {
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
         writer.write("d1", "s3", 1, IoTDBValue::FLOAT(15.0));
 
-        // writer.flush();
-
-
         writer.flush();
 
         // assert_eq!(buffer_writer.writer, expected);
-        assert_eq!(writer.file_writer.position, expected.len() as u64);
+        assert_eq!(writer.file_io_writer.out.position, expected.len() as u64);
     }
 
     #[test]
@@ -1149,7 +1155,7 @@ mod tests {
 
         writer.flush();
 
-        assert_eq!(writer.file_writer.writer, expected);
+        assert_eq!(writer.file_io_writer.out.writer, expected);
     }
 
     #[test]
@@ -1197,7 +1203,7 @@ mod tests {
 
         writer.flush();
 
-        assert_eq!(writer.file_writer.writer, expected);
+        assert_eq!(writer.file_io_writer.out.writer, expected);
     }
 
     #[test]
@@ -1244,7 +1250,7 @@ mod tests {
 
         writer.flush();
 
-        assert_eq!(writer.file_writer.writer, expected);
+        assert_eq!(writer.file_io_writer.out.writer, expected);
     }
 
     #[test]
@@ -1443,7 +1449,7 @@ mod tests {
 
         writer.flush();
 
-        assert_eq!(writer.file_writer.writer, expected);
+        assert_eq!(writer.file_io_writer.out.writer, expected);
     }
 
     #[test]

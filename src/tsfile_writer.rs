@@ -8,12 +8,13 @@ use crate::{
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use crate::tsfile_io_writer::TsFileIoWriter;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
 pub struct TsFileWriter<T: PositionedWrite> {
     filename: String,
-    pub(crate) file_writer: T,
+    pub(crate) file_io_writer: TsFileIoWriter<T>,
     group_writers: HashMap<Path, GroupWriter>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
@@ -72,6 +73,7 @@ impl<T: PositionedWrite> TsFileWriter<T> {
             for (device_id, group_writer) in self.group_writers.iter_mut() {
                 // self.file_writer.start_chunk_group(device_id);
                 // self.file_writer
+                self.file_io_writer.start_chunk_group(device_id.path.clone());
             }
         }
         // if (recordCount > 0) {
@@ -189,26 +191,17 @@ impl<T: PositionedWrite> TsFileWriter<T> {
                 .push(Box::new(timeseries_metadata));
         }
 
-        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.file_writer);
+        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.file_io_writer.out);
     }
 
     #[allow(unused_variables)]
     pub(crate) fn flush<'b>(&mut self) -> Result<(), &str> {
-        // Start to write to file
-        // Header
-        // let mut file = File::create(self.filename).expect("create failed");
-        let version: [u8; 1] = [3];
-
-        // Header
-        self.file_writer.write("TsFile".as_bytes()).expect("write failed");
-        self.file_writer.write(&version).expect("write failed");
-        // End of Header
-
         // Now iterate the
         for (_, group_writer) in self.group_writers.iter_mut() {
             // Write the group
-            group_writer.serialize(&mut self.file_writer);
+            group_writer.serialize(&mut self.file_io_writer.out);
         }
+
         // Statistics
         // Fetch all metadata
         self.chunk_group_metadata = self
@@ -239,18 +232,18 @@ impl<T: PositionedWrite> TsFileWriter<T> {
         }
 
         // Get meta offset
-        let meta_offset = self.file_writer.get_position();
+        let meta_offset = self.file_io_writer.out.get_position();
 
         // Write Marker 0x02
-        self.file_writer.write_all(&[0x02]);
+        self.file_io_writer.out.write_all(&[0x02]);
 
         let metadata_index_node = self.flush_metadata_index(&chunk_metadata_map);
 
         let ts_file_metadata = TsFileMetadata::new(Some(metadata_index_node), meta_offset);
 
-        let footer_index = self.file_writer.get_position();
+        let footer_index = self.file_io_writer.out.get_position();
 
-        ts_file_metadata.serialize(&mut self.file_writer);
+        ts_file_metadata.serialize(&mut self.file_io_writer.out);
 
         // Now serialize the Bloom Filter ?!
 
@@ -262,14 +255,14 @@ impl<T: PositionedWrite> TsFileWriter<T> {
 
         let bloom_filter = BloomFilter::build(paths);
 
-        bloom_filter.serialize(&mut self.file_writer);
+        bloom_filter.serialize(&mut self.file_io_writer.out);
 
-        let size_of_footer = (self.file_writer.get_position() - footer_index) as u32;
+        let size_of_footer = (self.file_io_writer.out.get_position() - footer_index) as u32;
 
-        self.file_writer.write_all(&size_of_footer.to_be_bytes());
+        self.file_io_writer.out.write_all(&size_of_footer.to_be_bytes());
 
         // Footer
-        self.file_writer.write_all("TsFile".as_bytes());
+        self.file_io_writer.out.write_all("TsFile".as_bytes());
         Ok(())
     }
 }
@@ -317,7 +310,7 @@ impl<T: PositionedWrite> TsFileWriter<T> {
 
         TsFileWriter {
             filename: String::from(filename),
-            file_writer,
+            file_io_writer: TsFileIoWriter::new(file_writer),
             group_writers,
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),
