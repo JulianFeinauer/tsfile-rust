@@ -41,6 +41,7 @@ impl dyn Encoder {
 
 pub struct PlainIntEncoder<T> {
     pub(crate) values: Vec<T>,
+    pub(crate) buffer: Vec<u8>,
 }
 
 impl<T> PlainIntEncoder<T> {
@@ -108,15 +109,18 @@ impl Encoder for PlainIntEncoder<i32> {
 impl Encoder for PlainIntEncoder<i64> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
-            IoTDBValue::LONG(v) => self.values.push(*v),
+            IoTDBValue::LONG(v) => {
+                self.buffer.write(&v.to_be_bytes());
+            }, // self.values.push(*v),
             _ => panic!("Something went wrong!"),
         }
     }
 
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        for val in &self.values {
-            buffer.write_all(&val.to_be_bytes());
-        }
+        // for val in &self.values {
+        //     buffer.write_all(&val.to_be_bytes());
+        // }
+        buffer.write(&self.buffer);
     }
     fn get_max_byte_size(&self) -> u32 {
         // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
@@ -125,11 +129,13 @@ impl Encoder for PlainIntEncoder<i64> {
         0
     }
     fn reset(&mut self) {
-        self.values.clear()
+        self.values.clear();
+        self.buffer.clear();
     }
 
     fn size(&mut self) -> u32 {
-        (&self.values.len() * 8) as u32
+        // (&self.values.len() * 8) as u32
+        self.buffer.len() as u32
     }
 }
 
@@ -141,7 +147,10 @@ impl PositionedWrite for Vec<u8> {
 
 impl<T> PlainIntEncoder<T> {
     pub(crate) fn new() -> PlainIntEncoder<T> {
-        Self { values: vec![] }
+        Self {
+            values: vec![],
+            buffer: Vec::new()
+        }
     }
 }
 

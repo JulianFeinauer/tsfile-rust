@@ -853,7 +853,7 @@ mod tests {
         TsFileWriter::write(&mut writer, "d1", "s1", 100, IoTDBValue::INT(15));
 
 
-        writer.flush();
+        writer.close();
 
         let buffer_writer = writer.file_io_writer.out;
 
@@ -897,7 +897,7 @@ mod tests {
             writer.write(device, "s2", i, IoTDBValue::INT(i as i32));
         }
 
-        writer.flush();
+        writer.close();
 
         ()
     }
@@ -929,7 +929,7 @@ mod tests {
             }
         }
 
-        writer.flush();
+        writer.close();
 
         ()
     }
@@ -961,7 +961,7 @@ mod tests {
             }
         }
 
-        writer.flush();
+        writer.close();
 
         ()
     }
@@ -1107,7 +1107,7 @@ mod tests {
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
         writer.write("d1", "s3", 1, IoTDBValue::FLOAT(15.0));
 
-        writer.flush();
+        writer.close();
 
         // assert_eq!(buffer_writer.writer, expected);
         assert_eq!(writer.file_io_writer.out.position, expected.len() as u64);
@@ -1154,7 +1154,7 @@ mod tests {
         writer.write("d1", "s", 1, IoTDBValue::INT(13));
 
 
-        writer.flush();
+        writer.close();
 
         assert_eq!(writer.file_io_writer.out.writer, expected);
     }
@@ -1202,7 +1202,7 @@ mod tests {
         writer.write("d1", "s", 1, IoTDBValue::LONG(13));
 
 
-        writer.flush();
+        writer.close();
 
         assert_eq!(writer.file_io_writer.out.writer, expected);
     }
@@ -1249,7 +1249,7 @@ mod tests {
         writer.write("d1", "s", 1, IoTDBValue::FLOAT(13.0));
 
 
-        writer.flush();
+        writer.close();
 
         assert_eq!(writer.file_io_writer.out.writer, expected);
     }
@@ -1448,7 +1448,7 @@ mod tests {
         }
 
 
-        writer.flush();
+        writer.close();
 
         assert_eq!(writer.file_io_writer.out.writer, expected);
     }
@@ -1475,12 +1475,6 @@ mod tests {
             writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
         }
 
-        writer.flush();
-
-        // let buffer: Vec<u8> = vec![];
-        //
-        // let mut buffer_writer = WriteWrapper::new(buffer);
-        //
-        // writer._flush(&mut buffer_writer);
+        writer.close();
     }
 }

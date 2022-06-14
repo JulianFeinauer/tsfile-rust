@@ -340,7 +340,7 @@ impl ChunkWriter {
                     // Compressed size
                     utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
                     // Write page content
-                    page_writer.statistics.serialize(&mut page_writer.buffer);
+                    page_writer.statistics.serialize(&mut self.page_buffer);
                     self.page_buffer.write_all(&page_writer.buffer);
                     println!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
                     &page_writer.buffer.clear();

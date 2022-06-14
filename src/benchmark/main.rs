@@ -29,7 +29,7 @@ fn benchmark() {
                 writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
             }
 
-            writer.flush();
+            writer.close();
         }
 
         let elapsed = now.elapsed();
