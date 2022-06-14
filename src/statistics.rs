@@ -12,6 +12,13 @@ pub enum Statistics {
 }
 
 impl Statistics {
+    pub(crate) fn count(&self) -> u32 {
+        match self {
+            Statistics::INT32(s) => s.count,
+            Statistics::INT64(s) => s.count,
+            Statistics::FLOAT(s) => s.count
+        }
+    }
     pub(crate) fn get_serialized_size(&self) -> u32 {
         match self {
             Statistics::INT32(s) => s.get_serialized_size(),

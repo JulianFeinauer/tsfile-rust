@@ -96,29 +96,28 @@ mod testsabc {
     // }
 
     #[test]
-fn flush_chunk() {
+    fn flush_chunk() {
+        let schema = TsFileSchemaBuilder::new()
+            .add(
+                "d1",
+                DeviceBuilder::new()
+                    .add(
+                        "s",
+                        TSDataType::INT64,
+                        TSEncoding::PLAIN,
+                        CompressionType::UNCOMPRESSED,
+                    )
+                    .build(),
+            )
+            .build();
 
-            let schema = TsFileSchemaBuilder::new()
-                .add(
-                    "d1",
-                    DeviceBuilder::new()
-                        .add(
-                            "s",
-                            TSDataType::INT64,
-                            TSEncoding::PLAIN,
-                            CompressionType::UNCOMPRESSED,
-                        )
-                        .build(),
-                )
-                .build();
+        let mut writer = TsFileWriter::new("benchmark.tsfile", schema);
+        // 16378790
+        for i in 0..30000001 {
+            writer.write("d1", "s", i, IoTDBValue::LONG(i));
+        }
 
-            let mut writer = TsFileWriter::new("benchmark.tsfile", schema);
-                             // 16378790
-            for i in 0..100000001 {
-                writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
-            }
-
-            writer.flush();
+        // writer.flush();
+        writer.close();
     }
-
 }

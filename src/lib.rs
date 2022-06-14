@@ -146,6 +146,7 @@ pub struct MeasurementGroup {
     measurement_schemas: HashMap<String, MeasurementSchema>,
 }
 
+#[derive(Clone)]
 pub struct Schema {
     measurement_groups: HashMap<String, MeasurementGroup>,
 }

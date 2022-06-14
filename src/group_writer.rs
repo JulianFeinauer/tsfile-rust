@@ -2,13 +2,36 @@ use crate::chunk_writer::ChunkWriter;
 use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::HashMap;
 use std::io::Write;
+use std::ops::Deref;
+use crate::tsfile_io_writer::TsFileIoWriter;
 
 pub struct GroupWriter {
     pub(crate) path: Path,
     pub(crate) chunk_writers: HashMap<String, ChunkWriter>,
+    pub(crate) last_time_map: HashMap<String, i64>
 }
 
 impl GroupWriter {
+    pub(crate) fn get_last_time_map(&mut self) -> HashMap<String, i64> {
+        self.last_time_map.clone()
+    }
+}
+
+impl GroupWriter {
+    pub(crate) fn flush_to_filewriter<T: PositionedWrite>(&mut self, file_writer: &mut TsFileIoWriter<T>) -> u64 {
+        println!("start flush device id: {}", &self.path.path);
+
+        self.seal_all_chunks();
+
+        let current_chunk_group_size = self.get_current_chunk_group_size();
+
+        for (_, series_writer) in self.chunk_writers.iter_mut() {
+            series_writer.write_to_file_writer(file_writer);
+        }
+
+        return current_chunk_group_size;
+    }
+
     pub(crate) fn update_max_group_mem_size(&mut self) -> u32 {
         let mut buffer_size = 0;
         for (_, chunk_writer) in self.chunk_writers.iter_mut() {
@@ -17,6 +40,23 @@ impl GroupWriter {
             buffer_size += chunk_writer_size;
         }
         buffer_size
+    }
+    fn seal_all_chunks(&mut self) {
+        for (_, writer) in self.chunk_writers.iter_mut() {
+            writer.seal_current_page();
+        }
+    }
+    fn get_current_chunk_group_size(&mut self) -> u64 {
+        // long size = 0;
+        // for (IChunkWriter writer : chunkWriters.values()) {
+        //   size += writer.getSerializedChunkSize();
+        // }
+        // return size;
+        let mut size = 0;
+        for (_, writer) in self.chunk_writers.iter_mut() {
+            size += writer.get_serialized_chunk_size();
+        }
+        return size;
     }
 }
 
@@ -37,10 +77,10 @@ impl GroupWriter {
     }
 
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), &str> {
-        // Marker
-        file.write(&[0]);
-        // Chunk Group Header
-        crate::write_str(file, self.path.path.as_str());
+        // // Marker
+        // file.write(&[0]);
+        // // Chunk Group Header
+        // crate::write_str(file, self.path.path.as_str());
         // End Group Header
         for (_, chunk_writer) in self.chunk_writers.iter_mut() {
             chunk_writer.serialize(file);

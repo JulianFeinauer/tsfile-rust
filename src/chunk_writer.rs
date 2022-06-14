@@ -6,6 +6,8 @@ use crate::{utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Seri
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
+use crate::tsfile_io_writer::TsFileIoWriter;
+use crate::utils::{size_var_i32, size_var_u32};
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
@@ -91,6 +93,88 @@ pub struct ChunkWriter {
     first_page_statistics: Option<Statistics>,
     value_count_in_one_page_for_next_check: u32,
     size_without_statistics: usize,
+}
+
+impl ChunkWriter {
+    pub(crate) fn seal_current_page(&mut self) {
+        match &self.current_page_writer {
+            None => {}
+            Some(pw) => {
+               if pw.point_number > 0 {
+                    self.write_page_to_buffer();
+               }
+            }
+        }
+    }
+}
+
+impl ChunkWriter {
+    pub(crate) fn get_serialized_chunk_size(&self) -> u64 {
+        if self.page_buffer.len() == 0 {
+            return 0;
+        } else {
+            let measurement_length = self.measurement_id.len() as i32;
+            // int measurementIdLength = measurementID.getBytes(TSFileConfig.STRING_CHARSET).length;
+            return 1_u64 // chunkType
+                + size_var_i32(measurement_length) as u64// measurementID length
+                + measurement_length as u64 // measurementID
+                + size_var_u32(self.page_buffer.len() as u32) as u64// dataSize
+                + 1_u64 // dataType
+                + 1_u64 // compressionType
+                + 1_u64 // encodingType
+                + self.page_buffer.len() as u64;
+        }
+    }
+}
+
+impl ChunkWriter {
+    pub(crate) fn write_to_file_writer<T: PositionedWrite>(&mut self, file_writer: &mut TsFileIoWriter<T>) {
+        self.seal_current_page();
+        self.write_all_pages_of_chunk_to_ts_file(file_writer, &self.statistics);
+
+        // reinit this chunk writer
+        self.page_buffer.clear();
+        self.num_pages = 0;
+        self.first_page_statistics = None;
+        self.statistics = Statistics::new(self.data_type);
+    }
+
+    fn write_all_pages_of_chunk_to_ts_file<T: PositionedWrite>(&self, file_writer: &mut TsFileIoWriter<T>, statistics: &Statistics) {
+        if statistics.count() == 0 {
+            return;
+        }
+        file_writer.start_flush_chunk(
+            self.measurement_id.clone(),
+            self.compression_type,
+            self.data_type,
+            self.encoding,
+            statistics.clone(),
+            self.page_buffer.len() as u32,
+            self.num_pages,
+            0
+        );
+
+        let data_offset = file_writer.out.get_position();
+        log::trace!("Dumping pages at offset {}", data_offset);
+
+        // Write the full page
+        file_writer.out.write_all(&self.page_buffer);
+
+        log::trace!("Offset after {}", file_writer.out.get_position());
+
+        // TODO implement this check?!
+        // int dataSize = (int) (writer.getPos() - dataOffset);
+        // if (dataSize != pageBuffer.size()) {
+        //   throw new IOException(
+        //       "Bytes written is inconsistent with the size of data: "
+        //           + dataSize
+        //           + " !="
+        //           + " "
+        //           + pageBuffer.size());
+        // }
+        //
+        file_writer.end_current_chunk();
+    }
 }
 
 impl ChunkWriter {
@@ -270,6 +354,62 @@ impl ChunkWriter {
     }
 }
 
+pub struct ChunkHeader {
+    pub measurement_id: String,
+    pub data_size: u32,
+    pub data_type: TSDataType,
+    pub compression: CompressionType,
+    pub encoding: TSEncoding,
+    pub num_pages: u32,
+    pub mask: u8,
+}
+
+impl ChunkHeader {
+    pub(crate) fn serialize<T: PositionedWrite>(&self, file_writer: &mut T) {
+        // Marker
+        // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
+        let marker = if self.num_pages <= 1 {
+            ONLY_ONE_PAGE_CHUNK_HEADER
+        } else {
+            CHUNK_HEADER
+        };
+        let marker = marker | self.mask;
+        file_writer.write(&[marker]).expect("write failed"); // Marker
+
+        write_str(file_writer, self.measurement_id.as_str());
+        // Data Lenght
+        utils::write_var_u32(self.data_size, file_writer);
+        // Data Type INT32 -> 1
+        file_writer.write(&[self.data_type.serialize()])
+            .expect("write failed");
+        // Compression Type UNCOMPRESSED -> 0
+        file_writer.write(&[self.compression.serialize()])
+            .expect("write failed");
+        // Encoding PLAIN -> 0
+        file_writer.write(&[self.encoding.serialize()])
+            .expect("write failed");
+        // End Chunk Header
+    }
+}
+
+impl ChunkHeader {
+    pub(crate) fn new(measurement_id: String, data_size: u32, data_type: TSDataType, compression: CompressionType, encoding: TSEncoding, num_pages: u32, mask: u8) -> ChunkHeader {
+        ChunkHeader {
+            measurement_id,
+            data_size,
+            data_type,
+            compression,
+            encoding,
+            num_pages,
+            mask
+        }
+    }
+}
+
+impl ChunkHeader {
+
+}
+
 impl ChunkWriter {
     pub fn new(
         measurement_id: String,
@@ -358,6 +498,18 @@ pub struct ChunkMetadata {
     pub(crate) mask: u8,
     offset_of_chunk_header: i64,
     pub(crate) statistics: Statistics,
+}
+
+impl ChunkMetadata {
+    pub(crate) fn new(measurement_id: String, data_type: TSDataType, position: u64, statistics: Statistics, mask: u8) -> ChunkMetadata {
+        ChunkMetadata {
+            measurement_id,
+            data_type,
+            mask: mask,
+            offset_of_chunk_header: position as i64,
+            statistics
+        }
+    }
 }
 
 impl Display for ChunkMetadata {

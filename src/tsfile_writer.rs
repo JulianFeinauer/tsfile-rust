@@ -20,6 +20,16 @@ pub struct TsFileWriter<T: PositionedWrite> {
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
     record_count: u32,
     record_count_for_next_mem_check: u32,
+    non_aligned_timeseries_last_time_map: HashMap<String, HashMap<String, i64>>,
+    pub schema: Schema,
+}
+
+impl<T: PositionedWrite> TsFileWriter<T> {
+    pub(crate) fn close(&mut self) {
+        log::info!("start close file");
+        self.flush_all_chunk_groups();
+        self.file_io_writer.end_file();
+    }
 }
 
 impl<T: PositionedWrite> TsFileWriter<T> {
@@ -40,7 +50,7 @@ impl<T: PositionedWrite> TsFileWriter<T> {
                 self.record_count += 1;
             }
             None => {
-                return Err("Unable to find group writer");
+                panic!("Unable to find group writer");
             }
         }
         self.check_memory_size_and_may_flush_chunks();
@@ -53,8 +63,8 @@ impl<T: PositionedWrite> TsFileWriter<T> {
             println!("Memcount calculated: {}", mem_size);
             println!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
             if mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE {
-                self.record_count_for_next_mem_check = self.record_count_for_next_mem_check
-                    * (CHUNK_GROUP_SIZE_THRESHOLD_BYTE / mem_size);
+                self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
                 return self.flush_all_chunk_groups();
             } else {
                 // println!("Record Count: {}, CHUNK_GROUP_SIZE_THRESHOLD_BYTE: {}, memsize: {}", self.record_count_for_next_mem_check, CHUNK_GROUP_SIZE_THRESHOLD_BYTE, mem_size);
@@ -74,51 +84,19 @@ impl<T: PositionedWrite> TsFileWriter<T> {
                 // self.file_writer.start_chunk_group(device_id);
                 // self.file_writer
                 self.file_io_writer.start_chunk_group(device_id.path.clone());
+                let pos = self.file_io_writer.out.get_position();
+                let data_size = group_writer.flush_to_filewriter(&mut self.file_io_writer);
+
+                if self.file_io_writer.out.get_position() - pos != data_size {
+                    panic!("Something went wrong!");
+                }
+
+                self.file_io_writer.end_chunk_group();
+
+                self.non_aligned_timeseries_last_time_map.insert(device_id.path.clone(), group_writer.get_last_time_map());
             }
+            self.reset();
         }
-        // if (recordCount > 0) {
-        //   for (Map.Entry<String, IChunkGroupWriter> entry : groupWriters.entrySet()) {
-        //     String deviceId = entry.getKey();
-        //     IChunkGroupWriter groupWriter = entry.getValue();
-        //     fileWriter.startChunkGroup(deviceId);
-        //     long pos = fileWriter.getPos();
-        //     long dataSize = groupWriter.flushToFileWriter(fileWriter);
-        //     if (fileWriter.getPos() - pos != dataSize) {
-        //       throw new IOException(
-        //           String.format(
-        //               "Flushed data size is inconsistent with computation! Estimated: %d, Actual: %d",
-        //               dataSize, fileWriter.getPos() - pos));
-        //     }
-        //     fileWriter.endChunkGroup();
-        //     if (groupWriter instanceof AlignedChunkGroupWriterImpl) {
-        //       // add flushed measurements
-        //       List<String> measurementList =
-        //           flushedMeasurementsInDeviceMap.computeIfAbsent(deviceId, p -> new ArrayList<>());
-        //       ((AlignedChunkGroupWriterImpl) groupWriter)
-        //           .getMeasurements()
-        //           .forEach(
-        //               measurementId -> {
-        //                 if (!measurementList.contains(measurementId)) {
-        //                   measurementList.add(measurementId);
-        //                 }
-        //               });
-        //       // add lastTime
-        //       if (!isUnseq) { // Sequence TsFile
-        //         this.alignedDeviceLastTimeMap.put(
-        //             deviceId, ((AlignedChunkGroupWriterImpl) groupWriter).getLastTime());
-        //       }
-        //     } else {
-        //       // add lastTime
-        //       if (!isUnseq) { // Sequence TsFile
-        //         this.nonAlignedTimeseriesLastTimeMap.put(
-        //             deviceId, ((NonAlignedChunkGroupWriterImpl) groupWriter).getLastTimeMap());
-        //       }
-        //     }
-        //   }
-        //   reset();
-        // }
-        // return false;
-        todo!("Unable to flush yet!");
         true
     }
 
@@ -197,9 +175,12 @@ impl<T: PositionedWrite> TsFileWriter<T> {
     #[allow(unused_variables)]
     pub(crate) fn flush<'b>(&mut self) -> Result<(), &str> {
         // Now iterate the
-        for (_, group_writer) in self.group_writers.iter_mut() {
+        for (device, group_writer) in self.group_writers.iter_mut() {
+            self.file_io_writer.start_chunk_group(device.path.clone());
             // Write the group
             group_writer.serialize(&mut self.file_io_writer.out);
+            group_writer.flush_to_filewriter(&mut self.file_io_writer);
+            self.file_io_writer.end_chunk_group();
         }
 
         // Statistics
@@ -265,22 +246,11 @@ impl<T: PositionedWrite> TsFileWriter<T> {
         self.file_io_writer.out.write_all("TsFile".as_bytes());
         Ok(())
     }
-}
-
-impl TsFileWriter<WriteWrapper<File>> {
-    // "Default" constructor to use... writes to a file
-    pub(crate) fn new(filename: &str, schema: Schema) -> TsFileWriter<WriteWrapper<File>> {
-        let mut file =
-            WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
-
-        TsFileWriter::new_from_writer(filename, schema, file)
-    }
-}
-
-impl<T: PositionedWrite> TsFileWriter<T> {
-
-    pub(crate) fn new_from_writer(filename: &str, schema: Schema, file_writer: T) -> TsFileWriter<T> {
-        let group_writers = schema
+    fn reset(&mut self) {
+        self.record_count = 0;
+        // Reset Group Writers
+        let schema = self.schema.clone();
+        self.group_writers = schema
             .measurement_groups
             .into_iter()
             .map(|(path, v)| {
@@ -303,6 +273,51 @@ impl<T: PositionedWrite> TsFileWriter<T> {
                                 )
                             })
                             .collect(),
+                        last_time_map: HashMap::new()
+                    },
+                )
+            })
+            .collect();
+    }
+}
+
+impl TsFileWriter<WriteWrapper<File>> {
+    // "Default" constructor to use... writes to a file
+    pub(crate) fn new(filename: &str, schema: Schema) -> TsFileWriter<WriteWrapper<File>> {
+        let mut file =
+            WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
+
+        TsFileWriter::new_from_writer(filename, schema, file)
+    }
+}
+
+impl<T: PositionedWrite> TsFileWriter<T> {
+
+    pub(crate) fn new_from_writer(filename: &str, schema: Schema, file_writer: T) -> TsFileWriter<T> {
+        let group_writers = schema.clone()
+            .measurement_groups
+            .into_iter()
+            .map(|(path, v)| {
+                (
+                    Path { path: path.clone() },
+                    GroupWriter {
+                        path: Path { path: path.clone() },
+                        chunk_writers: v
+                            .measurement_schemas
+                            .iter()
+                            .map(|(measurement_id, measurement_schema)| {
+                                (
+                                    measurement_id.clone(),
+                                    ChunkWriter::new(
+                                        measurement_id.clone(),
+                                        measurement_schema.data_type,
+                                        measurement_schema.compression,
+                                        measurement_schema.encoding,
+                                    ),
+                                )
+                            })
+                            .collect(),
+                        last_time_map: HashMap::new()
                     },
                 )
             })
@@ -310,12 +325,14 @@ impl<T: PositionedWrite> TsFileWriter<T> {
 
         TsFileWriter {
             filename: String::from(filename),
+            schema: schema,
             file_io_writer: TsFileIoWriter::new(file_writer),
             group_writers,
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),
             record_count: 0,
             record_count_for_next_mem_check: 100,
+            non_aligned_timeseries_last_time_map: HashMap::new()
         }
     }
 }
