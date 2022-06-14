@@ -2,24 +2,23 @@ use crate::chunk_writer::ChunkWriter;
 use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::HashMap;
 use std::io::Write;
-use std::ops::Deref;
 use crate::tsfile_io_writer::TsFileIoWriter;
 
-pub struct GroupWriter {
-    pub(crate) path: Path,
-    pub(crate) chunk_writers: HashMap<String, ChunkWriter>,
-    pub(crate) last_time_map: HashMap<String, i64>
+pub struct GroupWriter<'a> {
+    pub(crate) path: &'a str,
+    pub(crate) chunk_writers: HashMap<&'a str, ChunkWriter>,
+    pub(crate) last_time_map: HashMap<&'a str, i64>
 }
 
-impl GroupWriter {
-    pub(crate) fn get_last_time_map(&mut self) -> HashMap<String, i64> {
+impl<'a> GroupWriter<'a> {
+    pub(crate) fn get_last_time_map(&mut self) -> HashMap<&'a str, i64> {
         self.last_time_map.clone()
     }
 }
 
-impl GroupWriter {
+impl<'a> GroupWriter<'a> {
     pub(crate) fn flush_to_filewriter<T: PositionedWrite>(&mut self, file_writer: &mut TsFileIoWriter<T>) -> u64 {
-        println!("start flush device id: {}", &self.path.path);
+        println!("start flush device id: {}", &self.path);
 
         self.seal_all_chunks();
 
@@ -60,14 +59,14 @@ impl GroupWriter {
     }
 }
 
-impl GroupWriter {
+impl<'a> GroupWriter<'a> {
     pub(crate) fn write(
         &mut self,
-        measurement_id: String,
+        measurement_id: &str,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<u32, &str> {
-        match &mut self.chunk_writers.get_mut(&measurement_id) {
+        match &mut self.chunk_writers.get_mut(measurement_id) {
             Some(chunk_writer) => {
                 Ok(chunk_writer.write(timestamp, value).unwrap())
             }
@@ -90,7 +89,7 @@ impl GroupWriter {
 
     pub(crate) fn get_metadata(&self) -> ChunkGroupMetadata {
         ChunkGroupMetadata::new(
-            self.path.path.clone(),
+            self.path.to_owned(),
             self.chunk_writers
                 .iter()
                 .map(|(_, cw)| cw.get_metadata())

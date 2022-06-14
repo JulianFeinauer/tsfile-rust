@@ -1,6 +1,5 @@
 use std::io;
 
-use crate::Statistics::INT32;
 use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType};
 use crate::utils::size_var_u32;
 

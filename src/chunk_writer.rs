@@ -416,13 +416,13 @@ impl ChunkHeader {
 
 impl ChunkWriter {
     pub fn new(
-        measurement_id: String,
+        measurement_id: &str,
         data_type: TSDataType,
         compression_type: CompressionType,
         encoding: TSEncoding,
     ) -> ChunkWriter {
         ChunkWriter {
-            measurement_id,
+            measurement_id: measurement_id.to_owned(),
             data_type,
             compression_type,
             encoding,

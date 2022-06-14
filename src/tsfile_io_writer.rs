@@ -1,17 +1,18 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileMetadata};
 use crate::chunk_writer::ChunkHeader;
 
-pub struct TsFileIoWriter<T: PositionedWrite> {
+pub struct TsFileIoWriter<'a, T: PositionedWrite> {
     pub(crate) out: T,
-    current_chunk_group_device_id: Option<String>,
+    current_chunk_group_device_id: Option<&'a str>,
     chunk_metadata_list: Vec<ChunkMetadata>,
     current_chunk_metadata: Option<ChunkMetadata>,
     chunk_group_metadata_list: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
 }
 
-impl<T: PositionedWrite> TsFileIoWriter<T> {
+impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     pub(crate) fn end_current_chunk(&mut self) {
         match &self.current_chunk_metadata {
             None => {
@@ -25,7 +26,7 @@ impl<T: PositionedWrite> TsFileIoWriter<T> {
     }
 }
 
-impl<T: PositionedWrite> TsFileIoWriter<T> {
+impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     pub(crate) fn start_flush_chunk(&mut self, measurement_id: String, compression: CompressionType, data_type: TSDataType, encoding: TSEncoding, statistics: Statistics, data_size: u32, num_pages: u32, mask: u8) {
         self.current_chunk_metadata = Some(ChunkMetadata::new(measurement_id.clone(), data_type, self.out.get_position(), statistics, mask));
         let header = ChunkHeader::new(
@@ -41,8 +42,8 @@ impl<T: PositionedWrite> TsFileIoWriter<T> {
     }
 }
 
-impl<T: PositionedWrite> TsFileIoWriter<T> {
-    pub(crate) fn new(writer: T) -> TsFileIoWriter<T> {
+impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
+    pub(crate) fn new(writer: T) -> TsFileIoWriter<'a, T> {
         let mut io_writer = TsFileIoWriter {
             out: writer,
             current_chunk_group_device_id: None,
@@ -60,9 +61,9 @@ impl<T: PositionedWrite> TsFileIoWriter<T> {
         self.out.write(&[0x03]).expect("write failed");
     }
 
-    pub(crate) fn start_chunk_group(&mut self, device_id: String) {
+    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) {
         println!("start chunk group:{}, file position {}", &device_id, self.out.get_position());
-        let chunk_group_header = ChunkGroupHeader::new(device_id.as_str());
+        let chunk_group_header = ChunkGroupHeader::new(device_id);
         chunk_group_header.serialize(&mut self.out);
 
         self.current_chunk_group_device_id = Some(device_id);
@@ -89,7 +90,7 @@ impl<T: PositionedWrite> TsFileIoWriter<T> {
         //         chunk_metadata.clone()
         //     )
         // }
-        self.chunk_group_metadata_list.push(ChunkGroupMetadata::new(device_id.clone(), self.chunk_metadata_list.clone()));
+        self.chunk_group_metadata_list.push(ChunkGroupMetadata::new(device_id.into(), self.chunk_metadata_list.clone()));
         self.current_chunk_group_device_id = None;
         self.chunk_metadata_list.clear();
         self.out.flush();
@@ -206,7 +207,7 @@ impl<T: PositionedWrite> TsFileIoWriter<T> {
 
             if !self.timeseries_metadata_map.contains_key(&device_id) {
                 self.timeseries_metadata_map
-                    .insert(device_id.to_owned(), vec![]);
+                    .insert(device_id.clone(), vec![]);
             }
 
             self.timeseries_metadata_map

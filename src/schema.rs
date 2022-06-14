@@ -1,40 +1,40 @@
 use crate::{CompressionType, MeasurementGroup, MeasurementSchema, Schema, TSDataType, TSEncoding};
 use std::collections::HashMap;
 
-pub struct TsFileSchemaBuilder {
-    measurement_groups_map: HashMap<String, MeasurementGroup>,
+pub struct TsFileSchemaBuilder<'a> {
+    measurement_groups_map: HashMap<&'a str, MeasurementGroup<'a>>,
 }
 
-impl TsFileSchemaBuilder {
-    pub fn new() -> TsFileSchemaBuilder {
-        TsFileSchemaBuilder {
+impl<'a> TsFileSchemaBuilder<'a> {
+    pub fn new() -> TsFileSchemaBuilder<'a> {
+        TsFileSchemaBuilder{
             measurement_groups_map: HashMap::new(),
         }
     }
 
-    pub fn add(&mut self, device: &str, schema: MeasurementGroup) -> &mut TsFileSchemaBuilder {
+    pub fn add(&mut self, device: &'a str, schema: MeasurementGroup<'a>) -> &mut TsFileSchemaBuilder<'a> {
         self.measurement_groups_map
-            .insert(String::from(device), schema);
+            .insert(device, schema);
         self
     }
 
-    pub fn build(&mut self) -> Schema {
+    pub fn build(&mut self) -> Schema<'a> {
         // Copy the content
-        let mut measurement_groups: HashMap<String, MeasurementGroup> = HashMap::new();
+        let mut measurement_groups: HashMap<&str, MeasurementGroup> = HashMap::new();
         measurement_groups.clear();
         for (s, mg) in self.measurement_groups_map.iter_mut() {
-            measurement_groups.insert(s.clone(), mg.clone());
+            measurement_groups.insert(s, mg.clone());
         }
         Schema { measurement_groups }
     }
 }
 
-pub struct DeviceBuilder {
-    measurement_groups_map: HashMap<String, MeasurementSchema>,
+pub struct DeviceBuilder<'a> {
+    measurement_groups_map: HashMap<&'a str, MeasurementSchema>,
 }
 
-impl DeviceBuilder {
-    pub fn new() -> DeviceBuilder {
+impl<'a> DeviceBuilder<'a> {
+    pub fn new() -> DeviceBuilder<'a> {
         DeviceBuilder {
             measurement_groups_map: HashMap::new(),
         }
@@ -42,13 +42,13 @@ impl DeviceBuilder {
 
     pub fn add(
         &mut self,
-        measurement: &str,
+        measurement: &'a str,
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
-    ) -> &mut DeviceBuilder {
+    ) -> &mut DeviceBuilder<'a> {
         self.measurement_groups_map.insert(
-            String::from(measurement),
+            measurement,
             MeasurementSchema {
                 data_type,
                 compression,
@@ -58,13 +58,13 @@ impl DeviceBuilder {
         self
     }
 
-    pub fn build(&mut self) -> MeasurementGroup {
+    pub fn build(&mut self) -> MeasurementGroup<'a> {
         assert!(self.measurement_groups_map.len() > 0);
         // Copy the content
-        let mut measurement_schemas: HashMap<String, MeasurementSchema> = HashMap::new();
+        let mut measurement_schemas: HashMap<&'a str, MeasurementSchema> = HashMap::new();
         measurement_schemas.clear();
         for (s, ms) in self.measurement_groups_map.iter_mut() {
-            measurement_schemas.insert(s.clone(), ms.clone());
+            measurement_schemas.insert(s, ms.clone());
         }
         MeasurementGroup {
             measurement_schemas,

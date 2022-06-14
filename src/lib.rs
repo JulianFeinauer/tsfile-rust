@@ -144,17 +144,17 @@ impl MeasurementSchema {
 }
 
 #[derive(Clone)]
-pub struct MeasurementGroup {
-    measurement_schemas: HashMap<String, MeasurementSchema>,
+pub struct MeasurementGroup<'a> {
+    measurement_schemas: HashMap<&'a str, MeasurementSchema>,
 }
 
 #[derive(Clone)]
-pub struct Schema {
-    measurement_groups: HashMap<String, MeasurementGroup>,
+pub struct Schema<'a> {
+    measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
 }
 
-impl Schema {
-    fn simple(device_id: &str, measurement_id: &str, data_type: TSDataType, encoding: TSEncoding, compression: CompressionType) -> Schema {
+impl<'a> Schema<'a> {
+    fn simple(device_id: &'a str, measurement_id: &'a str, data_type: TSDataType, encoding: TSEncoding, compression: CompressionType) -> Schema<'a> {
         TsFileSchemaBuilder::new()
             .add(
                 device_id,
@@ -424,7 +424,7 @@ impl MetadataIndexNode {
 
             for (s, value) in device_metadata_index_map {
                 metadata_index_node.children.push(MetadataIndexEntry {
-                    name: s.clone(),
+                    name: s.to_owned(),
                     offset: file.get_position() as usize,
                 });
                 value.serialize(file);
@@ -741,15 +741,13 @@ pub fn write_file_3() {
     );
 
     let mut measurement_schema_map = HashMap::new();
-    measurement_schema_map.insert(String::from("s1"), measurement_schema);
+    measurement_schema_map.insert("s1", measurement_schema);
     let measurement_group = MeasurementGroup {
         measurement_schemas: measurement_schema_map,
     };
     let mut measurement_groups_map = HashMap::new();
-    let d1 = Path {
-        path: "d1".to_owned(),
-    };
-    measurement_groups_map.insert(d1.path.clone(), measurement_group);
+    let d1 = "d1";
+    measurement_groups_map.insert(d1, measurement_group);
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
@@ -851,15 +849,13 @@ mod tests {
         );
 
         let mut measurement_schema_map = HashMap::new();
-        measurement_schema_map.insert(String::from("s1"), measurement_schema);
+        measurement_schema_map.insert("s1", measurement_schema);
         let measurement_group = MeasurementGroup {
             measurement_schemas: measurement_schema_map,
         };
         let mut measurement_groups_map = HashMap::new();
-        let d1 = Path {
-            path: String::from("d1"),
-        };
-        measurement_groups_map.insert(d1.path.clone(), measurement_group);
+        let d1 = "d1";
+        measurement_groups_map.insert(d1, measurement_group);
         let schema = Schema {
             measurement_groups: measurement_groups_map,
         };
@@ -909,8 +905,9 @@ mod tests {
             .unwrap()
             .as_millis();
 
+        let filename = format!("{}-1-0-0.tsfile", epoch_time_ms);
         let mut writer =
-            TsFileWriter::new(format!("{}-1-0-0.tsfile", epoch_time_ms).as_str(), schema);
+            TsFileWriter::new(filename.as_str(), schema);
 
         for i in 0..100 {
             writer.write(device, "s1", i, IoTDBValue::INT(i as i32));

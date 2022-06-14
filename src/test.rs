@@ -61,42 +61,10 @@
 #[cfg(test)]
 mod testsabc {
     use std::env::current_dir;
-    use std::ops::DerefMut;
-    use std::process::Command;
 
-    use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding, TsFileWriter};
+    use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
     use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
     use crate::test_utils::{validate_output, write_ts_file};
-
-    // #[test]
-    // fn it_works() {
-    //     let mut cg = ChunkGroup {
-    //         chunks: vec![
-    //             Box::new(Chunk::<i32>::new()),
-    //             Box::new(Chunk::<f32>::new()),
-    //             Box::new(Chunk::<f64>::new()),
-    //         ],
-    //     };
-    //
-    //     match cg.chunks.get_mut(0) {
-    //         None => {}
-    //         Some(chunk) => {
-    //             chunk.deref_mut().set_raw(IoTDBValue::INT(13));
-    //         }
-    //     }
-    //     match cg.chunks.get_mut(1) {
-    //         None => {}
-    //         Some(chunk) => {
-    //             chunk.set_raw(IoTDBValue::FLOAT(13.0));
-    //         }
-    //     }
-    //     match cg.chunks.get_mut(2) {
-    //         None => {}
-    //         Some(chunk) => {
-    //             chunk.set_raw(IoTDBValue::DOUBLE(13.0));
-    //         }
-    //     }
-    // }
 
     // 30 MIO DP pro 45 sek -> 666666 / s -> 666.666 / ms
     #[test]
