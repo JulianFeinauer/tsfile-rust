@@ -6,7 +6,6 @@ use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
-use std::marker::PhantomData;
 use std::{io, vec};
 
 use crate::chunk_writer::ChunkMetadata;
@@ -18,6 +17,8 @@ use crate::murmur128::Murmur128;
 use crate::statistics::Statistics;
 use crate::utils::{write_var_i32, write_var_u32};
 use crate::MetadataIndexNodeType::LeafDevice;
+use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
+
 
 mod chunk_writer;
 pub mod compression;
@@ -31,6 +32,7 @@ mod tsfile_writer;
 mod utils;
 mod benchmark;
 mod tsfile_io_writer;
+mod test_utils;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
@@ -149,6 +151,24 @@ pub struct MeasurementGroup {
 #[derive(Clone)]
 pub struct Schema {
     measurement_groups: HashMap<String, MeasurementGroup>,
+}
+
+impl Schema {
+    fn simple(device_id: &str, measurement_id: &str, data_type: TSDataType, encoding: TSEncoding, compression: CompressionType) -> Schema {
+        TsFileSchemaBuilder::new()
+            .add(
+                device_id,
+                DeviceBuilder::new()
+                    .add(
+                        measurement_id,
+                        data_type,
+                        encoding,
+                        compression,
+                    )
+                    .build(),
+            )
+            .build()
+    }
 }
 
 struct ChunkGroupMetadata {

@@ -2,7 +2,7 @@ use crate::TSDataType;
 use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
-use crate::utils::{size_var_i32, size_var_u32};
+use crate::utils::{size_var_i32};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
@@ -286,7 +286,6 @@ impl TimeEncoder {
             .write_all(&self.first_value.expect("").to_be_bytes());
         // End Header
 
-        // FIXME continue here...
         // now we can drop the long-to-bytes values here
         let mut payload_buffer = vec![];
         for i in 0..delta_block_buffer.len() {

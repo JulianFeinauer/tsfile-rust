@@ -45,9 +45,8 @@ impl<T: PositionedWrite> TsFileWriter<T> {
         };
         match self.group_writers.get_mut(&device) {
             Some(group) => {
-                group.write(String::from(measurement_id), timestamp, value);
-                // TODO fetch from write operation
-                self.record_count += 1;
+                let records_written = group.write(String::from(measurement_id), timestamp, value).unwrap();
+                self.record_count += records_written;
             }
             None => {
                 panic!("Unable to find group writer");

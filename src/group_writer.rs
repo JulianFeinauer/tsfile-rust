@@ -66,11 +66,10 @@ impl GroupWriter {
         measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
-    ) -> Result<(), &str> {
+    ) -> Result<u32, &str> {
         match &mut self.chunk_writers.get_mut(&measurement_id) {
             Some(chunk_writer) => {
-                chunk_writer.write(timestamp, value);
-                Ok(())
+                Ok(chunk_writer.write(timestamp, value).unwrap())
             }
             None => Err("Unknown measurement id"),
         }

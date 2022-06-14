@@ -1,7 +1,6 @@
 use crate::encoding::Encoder;
-use crate::encoding::{PlainIntEncoder, TimeEncoder};
+use crate::encoding::{TimeEncoder};
 use crate::statistics::Statistics;
-use crate::TSDataType::FLOAT;
 use crate::{utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType, TSEncoding, ONLY_ONE_PAGE_CHUNK_HEADER, CHUNK_HEADER};
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -55,17 +54,17 @@ impl PageWriter {
             value_encoder: <dyn Encoder>::new(data_type, encoding),
             data_type,
             statistics: Statistics::new(data_type),
-            buffer: vec![],
+            buffer: Vec::with_capacity(65536),
             point_number: 0,
         }
     }
 
-    fn write(&mut self, timestamp: i64, value: &IoTDBValue) -> Result<(), &str> {
+    fn write(&mut self, timestamp: i64, value: &IoTDBValue) -> Result<u32, &str> {
         self.time_encoder.encode(timestamp);
         self.value_encoder.write(value);
         self.statistics.update(timestamp, value);
         self.point_number += 1;
-        Ok(())
+        Ok(1)
     }
 
     pub(crate) fn prepare_buffer(&mut self) {
@@ -110,19 +109,19 @@ impl ChunkWriter {
 
 impl ChunkWriter {
     pub(crate) fn get_serialized_chunk_size(&self) -> u64 {
-        if self.page_buffer.len() == 0 {
-            return 0;
+        return if self.page_buffer.len() == 0 {
+            0
         } else {
             let measurement_length = self.measurement_id.len() as i32;
             // int measurementIdLength = measurementID.getBytes(TSFileConfig.STRING_CHARSET).length;
-            return 1_u64 // chunkType
+            1_u64 // chunkType
                 + size_var_i32(measurement_length) as u64// measurementID length
                 + measurement_length as u64 // measurementID
                 + size_var_u32(self.page_buffer.len() as u32) as u64// dataSize
                 + 1_u64 // dataType
                 + 1_u64 // compressionType
                 + 1_u64 // encodingType
-                + self.page_buffer.len() as u64;
+                + self.page_buffer.len() as u64
         }
     }
 }
@@ -132,7 +131,7 @@ impl ChunkWriter {
         self.seal_current_page();
         self.write_all_pages_of_chunk_to_ts_file(file_writer, &self.statistics);
 
-        // reinit this chunk writer
+        // re-init this chunk writer
         self.page_buffer.clear();
         self.num_pages = 0;
         self.first_page_statistics = None;
@@ -202,9 +201,8 @@ impl ChunkWriter {
 }
 
 impl ChunkWriter {
-    pub fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<(), &str> {
+    pub fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<u32, &str> {
         // self.statistics.update(timestamp, &value);
-
         match &mut self.current_page_writer {
             None => {
                 // Create a page
@@ -214,11 +212,17 @@ impl ChunkWriter {
                 // do nothing
             }
         }
-        let page_writer = self.current_page_writer.as_mut().unwrap();
-        page_writer.write(timestamp, &value);
-        // check page size
+        let records_written = match &mut self.current_page_writer {
+            None => {
+                panic!("Something bad happened!");
+            }
+            Some(page_writer) => {
+                page_writer.write(timestamp, &value).unwrap().clone()
+            }
+        };
         self.check_page_size_and_may_open_new_page();
-        Ok(())
+        Ok(records_written)
+
     }
 
     fn check_page_size_and_may_open_new_page(&mut self) {
@@ -377,7 +381,7 @@ impl ChunkHeader {
         file_writer.write(&[marker]).expect("write failed"); // Marker
 
         write_str(file_writer, self.measurement_id.as_str());
-        // Data Lenght
+        // Data Length
         utils::write_var_u32(self.data_size, file_writer);
         // Data Type INT32 -> 1
         file_writer.write(&[self.data_type.serialize()])
@@ -453,7 +457,7 @@ impl ChunkWriter {
         file.write(&[marker]).expect("write failed"); // Marker
 
         write_str(file, self.measurement_id.as_str());
-        // Data Lenght
+        // Data Length
         utils::write_var_u32(self.page_buffer.len() as u32, file);
         // Data Type INT32 -> 1
         file.write(&[self.data_type.serialize()])
@@ -505,7 +509,7 @@ impl ChunkMetadata {
         ChunkMetadata {
             measurement_id,
             data_type,
-            mask: mask,
+            mask,
             offset_of_chunk_header: position as i64,
             statistics
         }
