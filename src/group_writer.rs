@@ -1,18 +1,13 @@
 use crate::chunk_writer::ChunkWriter;
 use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 use crate::tsfile_io_writer::TsFileIoWriter;
-#[cfg(feature = "fast_hash")]
-use ahash::AHashMap;
 
 
 pub struct GroupWriter<'a> {
     pub(crate) path: &'a str,
-    #[cfg(feature = "fast_hash")]
-    pub(crate) chunk_writers: AHashMap<&'a str, ChunkWriter>,
-    #[cfg(not(feature = "fast_hash"))]
-    pub(crate) chunk_writers: HashMap<&'a str, ChunkWriter>,
+    pub(crate) chunk_writers: BTreeMap<&'a str, ChunkWriter>,
     pub(crate) last_time_map: HashMap<&'a str, i64>
 }
 

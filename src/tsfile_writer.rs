@@ -6,22 +6,17 @@ use crate::{
     PositionedWrite, Schema, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable,
     TsFileMetadata, WriteWrapper,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
 use crate::tsfile_io_writer::TsFileIoWriter;
-#[cfg(feature = "fast_hash")]
-use ahash::AHashMap;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     filename: String,
     pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
-    #[cfg(feature = "fast_hash")]
-    group_writers: AHashMap<&'a str, GroupWriter<'a>>,
-    #[cfg(not(feature = "fast_hash"))]
-    group_writers: HashMap<&'a str, GroupWriter<'a>>,
+    group_writers: BTreeMap<&'a str, GroupWriter<'a>>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
     record_count: u32,

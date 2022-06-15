@@ -47,7 +47,7 @@ fn main() {
     for _ in 0..1 {
         let start = SystemTime::now();
         write_ts_file("benchmark2.tsfile", schema.clone(), |writer| {
-            for i in 0..100000001 {
+            for i in 0..1000001 {
                 writer.write("d1", "s1", i, IoTDBValue::LONG(i));
                 writer.write("d1", "s2", i, IoTDBValue::FLOAT(i as f32));
                 writer.write("d2", "s1", i, IoTDBValue::LONG(i));
