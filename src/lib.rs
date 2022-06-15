@@ -25,14 +25,14 @@ pub mod compression;
 pub mod encoding;
 mod group_writer;
 mod murmur128;
-mod schema;
+pub mod schema;
 mod statistics;
 mod test;
 mod tsfile_writer;
 mod utils;
 mod benchmark;
 mod tsfile_io_writer;
-mod test_utils;
+pub mod test_utils;
 
 const GET_MAX_DEGREE_OF_INDEX_NODE: usize = 256;
 const GET_BLOOM_FILTER_ERROR_RATE: f64 = 0.05;
@@ -58,7 +58,7 @@ pub trait PositionedWrite: Write {
     fn get_position(&self) -> u64;
 }
 
-struct WriteWrapper<T: Write> {
+pub struct WriteWrapper<T: Write> {
     position: u64,
     writer: T,
 }
@@ -154,7 +154,7 @@ pub struct Schema<'a> {
 }
 
 impl<'a> Schema<'a> {
-    fn simple(device_id: &'a str, measurement_id: &'a str, data_type: TSDataType, encoding: TSEncoding, compression: CompressionType) -> Schema<'a> {
+    pub fn simple(device_id: &'a str, measurement_id: &'a str, data_type: TSDataType, encoding: TSEncoding, compression: CompressionType) -> Schema<'a> {
         TsFileSchemaBuilder::new()
             .add(
                 device_id,

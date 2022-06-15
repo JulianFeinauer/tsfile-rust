@@ -190,7 +190,7 @@ impl ChunkWriter {
                     pw_mem_size +
                     // Header size
                     stat_size;
-                println!("Estimated max series mem size: {}", size);
+                log::trace!("Estimated max series mem size: {}", size);
                 size
             },
             None => {
@@ -236,7 +236,7 @@ impl ChunkWriter {
             let current_page_size = page_writer.estimate_max_mem_size();
 
             if current_page_size > PAGE_SIZE_THRESHOLD {
-                println!(
+                log::trace!(
             "enough size, write page {}, pageSizeThreshold:{}, currentPateSize:{}, valueCountInOnePage:{}",
             self.measurement_id.clone(),
             PAGE_SIZE_THRESHOLD,
@@ -346,7 +346,7 @@ impl ChunkWriter {
                     // Write page content
                     page_writer.statistics.serialize(&mut self.page_buffer);
                     self.page_buffer.write_all(&page_writer.buffer);
-                    println!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
+                    log::trace!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
                     &page_writer.buffer.clear();
                 }
                 self.num_pages += 1;

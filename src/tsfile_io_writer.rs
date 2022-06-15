@@ -62,7 +62,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     }
 
     pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) {
-        println!("start chunk group:{}, file position {}", &device_id, self.out.get_position());
+        log::info!("Start chunk group:{}, file position {}", &device_id, self.out.get_position());
         let chunk_group_header = ChunkGroupHeader::new(device_id);
         chunk_group_header.serialize(&mut self.out);
 

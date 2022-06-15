@@ -6,6 +6,11 @@ edition = "2021"
 
 [dependencies]
 log = "0.4.17"
+ahash = {version = "0.7.6", optional = true}
+
+[features]
+fast_hash = ["ahash"] # feature has no explicit dependencies
+
 
 [profile.release]
 # See https://kerkour.com/optimize-rust-binary-size

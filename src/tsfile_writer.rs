@@ -10,12 +10,17 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use crate::tsfile_io_writer::TsFileIoWriter;
+#[cfg(feature = "fast_hash")]
+use ahash::AHashMap;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     filename: String,
     pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
+    #[cfg(feature = "fast_hash")]
+    group_writers: AHashMap<&'a str, GroupWriter<'a>>,
+    #[cfg(not(feature = "fast_hash"))]
     group_writers: HashMap<&'a str, GroupWriter<'a>>,
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
@@ -34,10 +39,10 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
-    pub(crate) fn write(
+    pub fn write(
         &mut self,
-        device: &str,
-        measurement_id: &str,
+        device: &'a str,
+        measurement_id: &'a str,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<(), &str> {
@@ -57,8 +62,8 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
     fn check_memory_size_and_may_flush_chunks(&mut self) -> bool {
         if self.record_count >= self.record_count_for_next_mem_check {
             let mem_size = self.calculate_mem_size_for_all_groups();
-            println!("Memcount calculated: {}", mem_size);
-            println!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
+            log::trace!("Memcount calculated: {}", mem_size);
+            log::trace!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
             if mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE {
                 self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
                     * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
@@ -68,7 +73,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 // in the java impl there can be an overflow...
                 self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
                     * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
-                println!("Next record count for check {}", self.record_count_for_next_mem_check);
+                log::trace!("Next record count for check {}", self.record_count_for_next_mem_check);
                 return false;
             }
         }

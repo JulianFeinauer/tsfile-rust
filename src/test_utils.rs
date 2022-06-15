@@ -5,7 +5,7 @@ use crate::{PositionedWrite, Schema, TsFileWriter, WriteWrapper};
 
 const PATH_TO_TSFILE_TOOL: &str = "/Users/julian/Downloads/apache-iotdb-0.13.0-all-bin/tools/tsfileToolSet/print-tsfile-sketch.sh";
 
-pub(crate) fn validate_output(filename: &str, expected_structure: &str) {
+pub fn validate_output(filename: &str, expected_structure: &str) {
     let output = Command::new(PATH_TO_TSFILE_TOOL)
         .arg(filename)
         .output()
@@ -16,7 +16,7 @@ pub(crate) fn validate_output(filename: &str, expected_structure: &str) {
     assert_eq!(expected_structure, real)
 }
 
-pub(crate) fn write_ts_file<F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>) -> ()>(filename: &str, schema: Schema, test_code: F) {
+pub fn write_ts_file<F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>) -> ()>(filename: &str, schema: Schema, test_code: F) {
     let mut writer = TsFileWriter::new(filename, schema);
 
     // Execute the test

@@ -3,9 +3,15 @@ use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::HashMap;
 use std::io::Write;
 use crate::tsfile_io_writer::TsFileIoWriter;
+#[cfg(feature = "fast_hash")]
+use ahash::AHashMap;
+
 
 pub struct GroupWriter<'a> {
     pub(crate) path: &'a str,
+    #[cfg(feature = "fast_hash")]
+    pub(crate) chunk_writers: AHashMap<&'a str, ChunkWriter>,
+    #[cfg(not(feature = "fast_hash"))]
     pub(crate) chunk_writers: HashMap<&'a str, ChunkWriter>,
     pub(crate) last_time_map: HashMap<&'a str, i64>
 }
@@ -18,7 +24,7 @@ impl<'a> GroupWriter<'a> {
 
 impl<'a> GroupWriter<'a> {
     pub(crate) fn flush_to_filewriter<T: PositionedWrite>(&mut self, file_writer: &mut TsFileIoWriter<T>) -> u64 {
-        println!("start flush device id: {}", &self.path);
+        log::info!("Start flush device id: {}", &self.path);
 
         self.seal_all_chunks();
 
@@ -35,7 +41,7 @@ impl<'a> GroupWriter<'a> {
         let mut buffer_size = 0;
         for (_, chunk_writer) in self.chunk_writers.iter_mut() {
             let chunk_writer_size = chunk_writer.estimate_max_series_mem_size();
-            println!("Chunk Writer Size: {} for series {}", chunk_writer_size, chunk_writer.measurement_id);
+            log::trace!("Chunk Writer Size: {} for series {}", chunk_writer_size, chunk_writer.measurement_id);
             buffer_size += chunk_writer_size;
         }
         buffer_size
@@ -62,7 +68,7 @@ impl<'a> GroupWriter<'a> {
 impl<'a> GroupWriter<'a> {
     pub(crate) fn write(
         &mut self,
-        measurement_id: &str,
+        measurement_id: &'a str,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<u32, &str> {
