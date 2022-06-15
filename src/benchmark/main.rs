@@ -23,7 +23,7 @@ fn benchmark() {
                 )
                 .build();
 
-            let mut writer = TsFileWriter::new("benchmark.tsfile", schema);
+            let mut writer = TsFileWriter::new("benchmark.tsfile", schema, Default::default());
 
             for i in 0..10001 {
                 writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));

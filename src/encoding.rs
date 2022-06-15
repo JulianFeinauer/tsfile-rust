@@ -347,7 +347,7 @@ impl TimeEncoder {
 
 #[cfg(test)]
 mod tests {
-    use crate::TimeEncoder;
+    use crate::encoding::TimeEncoder;
 
     #[test]
     fn test_long_to_bytes() {

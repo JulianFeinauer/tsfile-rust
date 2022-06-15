@@ -1,7 +1,7 @@
 use crate::encoding::Encoder;
-use crate::encoding::{TimeEncoder};
+use crate::encoding::TimeEncoder;
 use crate::statistics::Statistics;
-use crate::{utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType, TSEncoding, ONLY_ONE_PAGE_CHUNK_HEADER, CHUNK_HEADER};
+use crate::{CHUNK_HEADER, CompressionType, IoTDBValue, ONLY_ONE_PAGE_CHUNK_HEADER, PositionedWrite, Serializable, TSDataType, TSEncoding, utils, write_str};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;

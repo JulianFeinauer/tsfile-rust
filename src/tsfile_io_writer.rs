@@ -1,9 +1,10 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileMetadata};
+use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileConfig, TsFileMetadata};
 use crate::chunk_writer::ChunkHeader;
 
 pub struct TsFileIoWriter<'a, T: PositionedWrite> {
+    config: TsFileConfig,
     pub(crate) out: T,
     current_chunk_group_device_id: Option<&'a str>,
     chunk_metadata_list: Vec<ChunkMetadata>,
@@ -43,8 +44,9 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
-    pub(crate) fn new(writer: T) -> TsFileIoWriter<'a, T> {
+    pub(crate) fn new(writer: T, config: TsFileConfig) -> TsFileIoWriter<'a, T> {
         let mut io_writer = TsFileIoWriter {
+            config,
             out: writer,
             current_chunk_group_device_id: None,
             chunk_metadata_list: vec![],
@@ -148,7 +150,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             .map(|path| path.clone())
             .collect();
 
-        let bloom_filter = BloomFilter::build(paths);
+        let bloom_filter = BloomFilter::build(paths, &self.config);
 
         bloom_filter.serialize(&mut self.out);
 
@@ -216,6 +218,6 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
                 .push(Box::new(timeseries_metadata));
         }
 
-        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out);
+        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out, &self.config);
     }
 }

@@ -9,6 +9,7 @@ use crate::{
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
+use crate::ts_file_config::TsFileConfig;
 use crate::tsfile_io_writer::TsFileIoWriter;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
@@ -23,6 +24,7 @@ pub struct TsFileWriter<'a, T: PositionedWrite> {
     record_count_for_next_mem_check: u32,
     non_aligned_timeseries_last_time_map: HashMap<&'a str, HashMap<&'a str, i64>>,
     pub schema: Schema<'a>,
+    config: TsFileConfig
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
@@ -147,17 +149,17 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
-    pub(crate) fn new(filename: &'a str, schema: Schema<'a>) -> TsFileWriter<'a, WriteWrapper<File>> {
+    pub(crate) fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> TsFileWriter<'a, WriteWrapper<File>> {
         let mut file =
             WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
 
-        TsFileWriter::new_from_writer(filename, schema, file)
+        TsFileWriter::new_from_writer(filename, schema, file, config)
     }
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
-    pub(crate) fn new_from_writer(filename: &'a str, schema: Schema<'a>, file_writer: T) -> TsFileWriter<'a, T> {
+    pub(crate) fn new_from_writer(filename: &'a str, schema: Schema<'a>, file_writer: T, config: TsFileConfig) -> TsFileWriter<'a, T> {
         let group_writers = schema.clone()
             .measurement_groups
             .into_iter()
@@ -190,13 +192,14 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         TsFileWriter {
             filename: String::from(filename),
             schema: schema,
-            file_io_writer: TsFileIoWriter::new(file_writer),
             group_writers,
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),
             record_count: 0,
             record_count_for_next_mem_check: 100,
-            non_aligned_timeseries_last_time_map: HashMap::new()
+            non_aligned_timeseries_last_time_map: HashMap::new(),
+            config: config,
+            file_io_writer: TsFileIoWriter::new(file_writer, config),
         }
     }
 }
