@@ -1,8 +1,8 @@
 use std::time::SystemTime;
-use tsfile_rust::{IoTDBValue, Schema, TSDataType};
-use tsfile_rust::compression::CompressionType;
-use tsfile_rust::encoding::TSEncoding;
-use tsfile_rust::test_utils::write_ts_file;
+use tsfile_writer::{IoTDBValue, Schema, TSDataType};
+use tsfile_writer::compression::CompressionType;
+use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::test_utils::write_ts_file;
 
 fn main() {
     let schema = Schema::simple("d1", "s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
