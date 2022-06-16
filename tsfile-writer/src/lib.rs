@@ -23,7 +23,6 @@ use crate::MetadataIndexNodeType::LeafDevice;
 
 mod chunk_writer;
 pub mod compression;
-pub mod encoding;
 pub mod errors;
 mod group_writer;
 mod murmur128;
@@ -35,6 +34,7 @@ pub mod ts_file_config;
 mod tsfile_io_writer;
 pub mod tsfile_writer;
 mod utils;
+pub mod encoding;
 
 #[allow(dead_code)]
 pub enum IoTDBValue {

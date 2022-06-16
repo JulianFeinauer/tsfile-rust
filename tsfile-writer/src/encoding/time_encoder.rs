@@ -1,144 +1,5 @@
-use crate::TSDataType;
-use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
-use std::marker::PhantomData;
-
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub enum TSEncoding {
-    PLAIN,
-}
-
-impl TSEncoding {
-    pub fn serialize(&self) -> u8 {
-        match self {
-            TSEncoding::PLAIN => 0,
-        }
-    }
-}
-
-pub trait Encoder {
-    fn write(&mut self, value: &IoTDBValue);
-    fn size(&mut self) -> u32;
-    fn get_max_byte_size(&self) -> u32;
-    fn serialize(&mut self, buffer: &mut Vec<u8>);
-    fn reset(&mut self);
-}
-
-impl dyn Encoder {
-    pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder> {
-        match (data_type, encoding) {
-            (TSDataType::INT32, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i32>::new()),
-            (TSDataType::FLOAT, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<f32>::new()),
-            (TSDataType::INT64, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i64>::new()),
-        }
-    }
-}
-
-pub struct PlainIntEncoder<T> {
-    // pub(crate) values: Vec<T>,
-    pub(crate) buffer: Vec<u8>,
-    phantom_data: PhantomData<T>,
-}
-
-impl Encoder for PlainIntEncoder<f32> {
-    fn write(&mut self, value: &IoTDBValue) {
-        match value {
-            IoTDBValue::FLOAT(v) => {
-                self.buffer.write(&(v.to_be_bytes()));
-            }
-            _ => panic!("Something went wrong!"),
-        }
-    }
-    fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        buffer.write(&self.buffer);
-    }
-    fn get_max_byte_size(&self) -> u32 {
-        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        // (24 + self.buffer.len()) as u32
-        0
-    }
-    fn reset(&mut self) {
-        self.buffer.clear();
-    }
-
-    fn size(&mut self) -> u32 {
-        self.buffer.len() as u32
-    }
-}
-
-impl Encoder for PlainIntEncoder<i32> {
-    fn write(&mut self, value: &IoTDBValue) {
-        match value {
-            IoTDBValue::INT(v) => {
-                utils::write_var_i32(*v, &mut self.buffer);
-            }
-            _ => panic!("Something went wrong!"),
-        }
-    }
-    fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        buffer.write(&self.buffer);
-    }
-
-    fn get_max_byte_size(&self) -> u32 {
-        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        (24 + self.buffer.len()) as u32
-    }
-    fn reset(&mut self) {
-        self.buffer.clear();
-    }
-
-    fn size(&mut self) -> u32 {
-        self.buffer.len() as u32
-    }
-}
-
-impl Encoder for PlainIntEncoder<i64> {
-    fn write(&mut self, value: &IoTDBValue) {
-        match value {
-            IoTDBValue::LONG(v) => {
-                self.buffer.write(&v.to_be_bytes());
-            } // self.values.push(*v),
-            _ => panic!("Something went wrong!"),
-        }
-    }
-
-    fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        // for val in &self.values {
-        //     buffer.write_all(&val.to_be_bytes());
-        // }
-        buffer.write(&self.buffer);
-    }
-    fn get_max_byte_size(&self) -> u32 {
-        // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        // (24 + self.values.len() * 8) as u32
-        // TODO why is this?
-        0
-    }
-    fn reset(&mut self) {
-        self.buffer.clear();
-    }
-
-    fn size(&mut self) -> u32 {
-        // (&self.values.len() * 8) as u32
-        self.buffer.len() as u32
-    }
-}
-
-impl PositionedWrite for Vec<u8> {
-    fn get_position(&self) -> u64 {
-        self.len() as u64
-    }
-}
-
-impl<T> PlainIntEncoder<T> {
-    pub(crate) fn new() -> PlainIntEncoder<T> {
-        Self {
-            buffer: Vec::new(),
-            phantom_data: PhantomData::default(),
-        }
-    }
-}
 
 pub struct TimeEncoder {
     first_value: Option<i64>,
@@ -188,7 +49,7 @@ impl TimeEncoder {
         width
     }
 
-    fn long_to_bytes(number: i64, result: &mut Vec<u8>, pos: usize, width: u32) {
+    pub(crate) fn long_to_bytes(number: i64, result: &mut Vec<u8>, pos: usize, width: u32) {
         let mut cnt = (pos & 0x07) as u8;
         let mut index = pos >> 3;
 
@@ -324,42 +185,5 @@ impl TimeEncoder {
         self.flush();
         // Copy internal buffer to out buffer
         buffer.write_all(&self.buffer);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::encoding::TimeEncoder;
-
-    #[test]
-    fn test_long_to_bytes() {
-        let mut result = vec![];
-        let width = 4;
-        TimeEncoder::long_to_bytes(1, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 2, width as u32);
-
-        assert_eq!(result, [0b00010001, 0b00010000])
-    }
-
-    #[test]
-    fn test_long_to_bytes_2() {
-        let mut result = vec![];
-        let width = 7;
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 2, width as u32);
-
-        assert_eq!(result, [0b00000010, 0b00000100, 0b00001000])
-    }
-
-    #[test]
-    fn test_long_to_bytes_3() {
-        let mut result = vec![];
-        let width = 7;
-        TimeEncoder::long_to_bytes(0, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(81, &mut result, width * 1, width as u32);
-
-        assert_eq!(result, [1, 68])
     }
 }

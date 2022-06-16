@@ -13,7 +13,6 @@ use std::io::Write;
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
-// const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 1500;
 const PAGE_SIZE_THRESHOLD: u32 = 65536;
 const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
@@ -28,28 +27,7 @@ struct PageWriter {
 }
 
 impl PageWriter {
-    pub(crate) fn reset(&mut self) {
-        self.statistics = Statistics::new(self.data_type);
-        self.time_encoder.reset();
-        self.value_encoder.reset();
-        self.point_number = 0;
-    }
-}
 
-impl PageWriter {
-    pub(crate) fn estimate_max_mem_size(&mut self) -> u32 {
-        let time_encoder_size = self.time_encoder.size();
-        let value_encoder_size = self.value_encoder.size();
-        let time_encoder_max_size = self.time_encoder.get_max_byte_size();
-        let value_encoder_max_size = self.value_encoder.get_max_byte_size();
-        let max_size =
-            time_encoder_size + value_encoder_size + time_encoder_max_size + value_encoder_max_size;
-        log::trace!("Max size estimated for page writer: {}", max_size);
-        max_size
-    }
-}
-
-impl PageWriter {
     fn new(data_type: TSDataType, encoding: TSEncoding) -> PageWriter {
         PageWriter {
             time_encoder: TimeEncoder::new(),
@@ -59,6 +37,24 @@ impl PageWriter {
             buffer: Vec::with_capacity(65536),
             point_number: 0,
         }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.statistics = Statistics::new(self.data_type);
+        self.time_encoder.reset();
+        self.value_encoder.reset();
+        self.point_number = 0;
+    }
+
+    pub(crate) fn estimate_max_mem_size(&mut self) -> u32 {
+        let time_encoder_size = self.time_encoder.size();
+        let value_encoder_size = self.value_encoder.size();
+        let time_encoder_max_size = self.time_encoder.get_max_byte_size();
+        let value_encoder_max_size = self.value_encoder.get_max_byte_size();
+        let max_size =
+            time_encoder_size + value_encoder_size + time_encoder_max_size + value_encoder_max_size;
+        log::trace!("Max size estimated for page writer: {}", max_size);
+        max_size
     }
 
     fn write(&mut self, timestamp: i64, value: &IoTDBValue) -> Result<u32, &str> {
@@ -99,6 +95,89 @@ pub struct ChunkWriter {
 }
 
 impl ChunkWriter {
+    pub fn new(
+        measurement_id: &str,
+        data_type: TSDataType,
+        compression_type: CompressionType,
+        encoding: TSEncoding,
+    ) -> ChunkWriter {
+        ChunkWriter {
+            measurement_id: measurement_id.to_owned(),
+            data_type,
+            compression_type,
+            encoding,
+            mask: 0,
+            offset_of_chunk_header: None,
+            statistics: Statistics::new(data_type),
+            current_page_writer: None,
+            page_buffer: vec![],
+            num_pages: 0,
+            first_page_statistics: None,
+            value_count_in_one_page_for_next_check: VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK,
+            size_without_statistics: 0,
+        }
+    }
+
+    // This method is used?!
+    #[allow(dead_code)]
+    pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
+        // Before we can write the header we have to serialize the current page
+        self.write_page_to_buffer();
+
+        // Chunk Header
+        // store offset for metadata
+        self.offset_of_chunk_header = Some(file.get_position());
+
+        // Marker
+        // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
+        let marker = if self.num_pages <= 1 {
+            ONLY_ONE_PAGE_CHUNK_HEADER
+        } else {
+            CHUNK_HEADER
+        };
+        let marker = marker | self.mask;
+        file.write(&[marker]).expect("write failed"); // Marker
+
+        write_str(file, self.measurement_id.as_str());
+        // Data Length
+        utils::write_var_u32(self.page_buffer.len() as u32, file);
+        // Data Type INT32 -> 1
+        file.write(&[self.data_type.serialize()])
+            .expect("write failed");
+        // Compression Type UNCOMPRESSED -> 0
+        file.write(&[self.compression_type.serialize()])
+            .expect("write failed");
+        // Encoding PLAIN -> 0
+        file.write(&[self.encoding.serialize()])
+            .expect("write failed");
+        // End Chunk Header
+
+        log::trace!("Dumping pages at offset {}", file.get_position());
+
+        // Write the full page
+        file.write_all(&self.page_buffer);
+
+        log::trace!("Offset after {}", file.get_position());
+    }
+
+    // This method is used?!
+    #[allow(dead_code)]
+    pub(crate) fn get_metadata(&self) -> ChunkMetadata {
+        ChunkMetadata {
+            measurement_id: self.measurement_id.clone(),
+            data_type: self.data_type,
+            // FIXME add this
+            mask: 0,
+            offset_of_chunk_header: match self.offset_of_chunk_header {
+                None => {
+                    panic!("get_metadata called before offset is defined");
+                }
+                Some(offset) => offset,
+            } as i64,
+            statistics: self.statistics.clone(),
+        }
+    }
+
     pub(crate) fn seal_current_page(&mut self) {
         match &self.current_page_writer {
             None => {}
@@ -109,9 +188,7 @@ impl ChunkWriter {
             }
         }
     }
-}
 
-impl ChunkWriter {
     pub(crate) fn get_serialized_chunk_size(&self) -> u64 {
         if self.page_buffer.is_empty() {
             0
@@ -128,9 +205,7 @@ impl ChunkWriter {
                 + self.page_buffer.len() as u64
         }
     }
-}
 
-impl ChunkWriter {
     pub(crate) fn write_to_file_writer<T: PositionedWrite>(
         &mut self,
         file_writer: &mut TsFileIoWriter<T>,
@@ -185,9 +260,7 @@ impl ChunkWriter {
         //
         file_writer.end_current_chunk();
     }
-}
 
-impl ChunkWriter {
     pub(crate) fn estimate_max_series_mem_size(&mut self) -> u32 {
         // return pageBuffer.size()
         // + pageWriter.estimateMaxMemSize()
@@ -207,9 +280,7 @@ impl ChunkWriter {
             None => 0,
         }
     }
-}
 
-impl ChunkWriter {
     pub fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<u32, &str> {
         // self.statistics.update(timestamp, &value);
         match &mut self.current_page_writer {
@@ -409,9 +480,7 @@ impl ChunkHeader {
             .expect("write failed");
         // End Chunk Header
     }
-}
 
-impl ChunkHeader {
     pub(crate) fn new(
         measurement_id: String,
         data_size: u32,
@@ -429,93 +498,6 @@ impl ChunkHeader {
             encoding,
             num_pages,
             mask,
-        }
-    }
-}
-
-impl ChunkHeader {}
-
-impl ChunkWriter {
-    pub fn new(
-        measurement_id: &str,
-        data_type: TSDataType,
-        compression_type: CompressionType,
-        encoding: TSEncoding,
-    ) -> ChunkWriter {
-        ChunkWriter {
-            measurement_id: measurement_id.to_owned(),
-            data_type,
-            compression_type,
-            encoding,
-            mask: 0,
-            offset_of_chunk_header: None,
-            statistics: Statistics::new(data_type),
-            current_page_writer: None,
-            page_buffer: vec![],
-            num_pages: 0,
-            first_page_statistics: None,
-            value_count_in_one_page_for_next_check: VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK,
-            size_without_statistics: 0,
-        }
-    }
-
-    // This method is used?!
-    #[allow(dead_code)]
-    pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
-        // Before we can write the header we have to serialize the current page
-        self.write_page_to_buffer();
-
-        // Chunk Header
-        // store offset for metadata
-        self.offset_of_chunk_header = Some(file.get_position());
-
-        // Marker
-        // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
-        let marker = if self.num_pages <= 1 {
-            ONLY_ONE_PAGE_CHUNK_HEADER
-        } else {
-            CHUNK_HEADER
-        };
-        let marker = marker | self.mask;
-        file.write(&[marker]).expect("write failed"); // Marker
-
-        write_str(file, self.measurement_id.as_str());
-        // Data Length
-        utils::write_var_u32(self.page_buffer.len() as u32, file);
-        // Data Type INT32 -> 1
-        file.write(&[self.data_type.serialize()])
-            .expect("write failed");
-        // Compression Type UNCOMPRESSED -> 0
-        file.write(&[self.compression_type.serialize()])
-            .expect("write failed");
-        // Encoding PLAIN -> 0
-        file.write(&[self.encoding.serialize()])
-            .expect("write failed");
-        // End Chunk Header
-
-        log::trace!("Dumping pages at offset {}", file.get_position());
-
-        // Write the full page
-        file.write_all(&self.page_buffer);
-
-        log::trace!("Offset after {}", file.get_position());
-    }
-
-    // This method is used?!
-    #[allow(dead_code)]
-    pub(crate) fn get_metadata(&self) -> ChunkMetadata {
-        ChunkMetadata {
-            measurement_id: self.measurement_id.clone(),
-            data_type: self.data_type,
-            // FIXME add this
-            mask: 0,
-            offset_of_chunk_header: match self.offset_of_chunk_header {
-                None => {
-                    panic!("get_metadata called before offset is defined");
-                }
-                Some(offset) => offset,
-            } as i64,
-            statistics: self.statistics.clone(),
         }
     }
 }
@@ -545,15 +527,7 @@ impl ChunkMetadata {
             statistics,
         }
     }
-}
 
-impl Display for ChunkMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} (...)", self.measurement_id)
-    }
-}
-
-impl ChunkMetadata {
     pub(crate) fn serialize(
         &self,
         file: &mut dyn PositionedWrite,
@@ -564,5 +538,11 @@ impl ChunkMetadata {
             self.statistics.serialize(file);
         }
         result
+    }
+}
+
+impl Display for ChunkMetadata {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (...)", self.measurement_id)
     }
 }
