@@ -3,6 +3,10 @@ name = "tsfile-writer"
 authors = ["jfeinauer@hey.com"]
 version = "0.1.1"
 edition = "2021"
+license = "Apache-2.0"
+description = "A simple TsFile writer in rust"
+readme = "README.md"
+repository = "https://github.com/JulianFeinauer/tsfile-rust/tree/main/tsfile-writer"
 
 [dependencies]
 log = "0.4.17"
