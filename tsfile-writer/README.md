@@ -11,20 +11,81 @@ Most notably:
 
 But generally, the TsFiles written with this client are 100% compatible with TsFiles written in Java.
 
-## Encodings
+## Quickstart
+
+To write a TsFile just do something like
+
+```
+let schema = TsFileSchemaBuilder::new()
+        .add(
+            "d1",
+            DeviceBuilder::new()
+                .add(
+                    "s1",
+                    TSDataType::INT64,
+                    TSEncoding::PLAIN,
+                    CompressionType::UNCOMPRESSED,
+                )
+                .add(
+                    "s2",
+                    TSDataType::FLOAT,
+                    TSEncoding::PLAIN,
+                    CompressionType::UNCOMPRESSED,
+                )
+                .build(),
+        )
+        .add(
+            "d2",
+            DeviceBuilder::new()
+                .add(
+                    "s1",
+                    TSDataType::INT64,
+                    TSEncoding::PLAIN,
+                    CompressionType::UNCOMPRESSED,
+                )
+                .add(
+                    "s2",
+                    TSDataType::FLOAT,
+                    TSEncoding::PLAIN,
+                    CompressionType::UNCOMPRESSED,
+                )
+                .build(),
+        )
+        .build();
+        
+let mut writer = TsFileWriter::new(
+    "target/benchmark2.tsfile",
+    schema.clone(),
+    Default::default(),
+)
+.unwrap();
+        
+// Write multiple timeseries at once
+writer.write_many("d1",1, vec![
+        DataPoint::new("s1", IoTDBValue::LONG(i)),
+        DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+    ]);
+// Write single series
+writer.write("d2", "s1", 1, IoTDBValue::LONG(i));
+writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
+```
+
+## Currently implemented features
+
+### Encodings
 
 * [x] Timeseries Encoding
 * [x] Plain
 * [ ] everything else...
 
-## Datatypes
+### Datatypes
 
-- [x] INT32
-- [x] INT64
-- [x] FLOAT
-- [ ] everything else...
+* [x] INT32
+* [x] INT64
+* [x] FLOAT
+* [ ] everything else...
 
-## Compression
+### Compression
 
-- [x] Uncompressed
-- [ ] everything else...
+* [x] Uncompressed
+* [ ] everything else...
