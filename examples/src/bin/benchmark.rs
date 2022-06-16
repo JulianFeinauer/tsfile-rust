@@ -1,14 +1,20 @@
-use std::time::SystemTime;
 use simplelog::{LevelFilter, SimpleLogger};
-use tsfile_writer::{IoTDBValue, Schema, TSDataType};
+use std::time::SystemTime;
 use tsfile_writer::compression::CompressionType;
 use tsfile_writer::encoding::TSEncoding;
 use tsfile_writer::test_utils::write_ts_file;
+use tsfile_writer::{IoTDBValue, Schema, TSDataType};
 
 fn main() {
     let _ = SimpleLogger::init(LevelFilter::Info, Default::default());
 
-    let schema = Schema::simple("d1", "s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
+    let schema = Schema::simple(
+        "d1",
+        "s",
+        TSDataType::INT64,
+        TSEncoding::PLAIN,
+        CompressionType::UNCOMPRESSED,
+    );
 
     let mut durations: Vec<f64> = vec![];
     for _ in 0..10 {
@@ -33,5 +39,8 @@ fn main() {
     }
 
     let count = durations.len() as f64;
-    println!("Mean: {:.3}", durations.into_iter().reduce(|a, b| a + b).unwrap()/ count);
+    println!(
+        "Mean: {:.3}",
+        durations.into_iter().reduce(|a, b| a + b).unwrap() / count
+    );
 }

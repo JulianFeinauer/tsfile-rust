@@ -1,12 +1,15 @@
 use crate::encoding::Encoder;
 use crate::encoding::TimeEncoder;
 use crate::statistics::Statistics;
-use crate::{CHUNK_HEADER, CompressionType, IoTDBValue, ONLY_ONE_PAGE_CHUNK_HEADER, PositionedWrite, Serializable, TSDataType, TSEncoding, TsFileError, utils, write_str};
+use crate::tsfile_io_writer::TsFileIoWriter;
+use crate::utils::{size_var_i32, size_var_u32};
+use crate::{
+    utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType,
+    TSEncoding, TsFileError, CHUNK_HEADER, ONLY_ONE_PAGE_CHUNK_HEADER,
+};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use crate::tsfile_io_writer::TsFileIoWriter;
-use crate::utils::{size_var_i32, size_var_u32};
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
@@ -39,10 +42,8 @@ impl PageWriter {
         let value_encoder_size = self.value_encoder.size();
         let time_encoder_max_size = self.time_encoder.get_max_byte_size();
         let value_encoder_max_size = self.value_encoder.get_max_byte_size();
-        let max_size = time_encoder_size
-            + value_encoder_size
-            + time_encoder_max_size
-            + value_encoder_max_size;
+        let max_size =
+            time_encoder_size + value_encoder_size + time_encoder_max_size + value_encoder_max_size;
         log::trace!("Max size estimated for page writer: {}", max_size);
         max_size
     }
@@ -102,9 +103,9 @@ impl ChunkWriter {
         match &self.current_page_writer {
             None => {}
             Some(pw) => {
-               if pw.point_number > 0 {
+                if pw.point_number > 0 {
                     self.write_page_to_buffer();
-               }
+                }
             }
         }
     }
@@ -130,7 +131,10 @@ impl ChunkWriter {
 }
 
 impl ChunkWriter {
-    pub(crate) fn write_to_file_writer<T: PositionedWrite>(&mut self, file_writer: &mut TsFileIoWriter<T>) {
+    pub(crate) fn write_to_file_writer<T: PositionedWrite>(
+        &mut self,
+        file_writer: &mut TsFileIoWriter<T>,
+    ) {
         self.seal_current_page();
         self.write_all_pages_of_chunk_to_ts_file(file_writer, &self.statistics);
 
@@ -141,7 +145,11 @@ impl ChunkWriter {
         self.statistics = Statistics::new(self.data_type);
     }
 
-    fn write_all_pages_of_chunk_to_ts_file<T: PositionedWrite>(&self, file_writer: &mut TsFileIoWriter<T>, statistics: &Statistics) {
+    fn write_all_pages_of_chunk_to_ts_file<T: PositionedWrite>(
+        &self,
+        file_writer: &mut TsFileIoWriter<T>,
+        statistics: &Statistics,
+    ) {
         if statistics.count() == 0 {
             return;
         }
@@ -153,7 +161,7 @@ impl ChunkWriter {
             statistics.clone(),
             self.page_buffer.len() as u32,
             self.num_pages,
-            0
+            0,
         );
 
         let data_offset = file_writer.out.get_position();
@@ -195,10 +203,8 @@ impl ChunkWriter {
                     stat_size;
                 log::trace!("Estimated max series mem size: {}", size);
                 size
-            },
-            None => {
-                0
             }
+            None => 0,
         }
     }
 }
@@ -219,13 +225,10 @@ impl ChunkWriter {
             None => {
                 panic!("Something bad happened!");
             }
-            Some(page_writer) => {
-                page_writer.write(timestamp, &value).unwrap()
-            }
+            Some(page_writer) => page_writer.write(timestamp, &value).unwrap(),
         };
         self.check_page_size_and_may_open_new_page();
         Ok(records_written)
-
     }
 
     fn check_page_size_and_may_open_new_page(&mut self) {
@@ -251,7 +254,8 @@ impl ChunkWriter {
                 // valueCountInOnePageForNextCheck =
                 //     (int) (((float) pageSizeThreshold / currentPageSize) * pageWriter.getPointNumber());
                 self.value_count_in_one_page_for_next_check =
-                    ((PAGE_SIZE_THRESHOLD as f32) / (current_page_size as f32) * (page_writer.point_number as f32)) as u32;
+                    ((PAGE_SIZE_THRESHOLD as f32) / (current_page_size as f32)
+                        * (page_writer.point_number as f32)) as u32;
             }
         }
     }
@@ -314,8 +318,7 @@ impl ChunkWriter {
 
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let header_bytes = &temp[0..self.size_without_statistics];
-                    self.page_buffer
-                        .write_all(header_bytes);
+                    self.page_buffer.write_all(header_bytes);
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     match &self.first_page_statistics {
                         Some(stat) => stat.serialize(&mut self.page_buffer),
@@ -323,8 +326,7 @@ impl ChunkWriter {
                     };
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let remainder_bytes = &temp[self.size_without_statistics..];
-                    self.page_buffer
-                        .write_all(remainder_bytes);
+                    self.page_buffer.write_all(remainder_bytes);
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Uncompressed size
                     utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
@@ -335,7 +337,10 @@ impl ChunkWriter {
                     log::trace!("Statistics: {:?}", &page_writer.statistics);
                     page_writer.statistics.serialize(&mut self.page_buffer);
 
-                    log::trace!("Flushing page at page buffer offset {}", self.page_buffer.get_position());
+                    log::trace!(
+                        "Flushing page at page buffer offset {}",
+                        self.page_buffer.get_position()
+                    );
 
                     self.page_buffer.write_all(&page_writer.buffer);
 
@@ -391,20 +396,31 @@ impl ChunkHeader {
         // Data Length
         utils::write_var_u32(self.data_size, file_writer);
         // Data Type INT32 -> 1
-        file_writer.write(&[self.data_type.serialize()])
+        file_writer
+            .write(&[self.data_type.serialize()])
             .expect("write failed");
         // Compression Type UNCOMPRESSED -> 0
-        file_writer.write(&[self.compression.serialize()])
+        file_writer
+            .write(&[self.compression.serialize()])
             .expect("write failed");
         // Encoding PLAIN -> 0
-        file_writer.write(&[self.encoding.serialize()])
+        file_writer
+            .write(&[self.encoding.serialize()])
             .expect("write failed");
         // End Chunk Header
     }
 }
 
 impl ChunkHeader {
-    pub(crate) fn new(measurement_id: String, data_size: u32, data_type: TSDataType, compression: CompressionType, encoding: TSEncoding, num_pages: u32, mask: u8) -> ChunkHeader {
+    pub(crate) fn new(
+        measurement_id: String,
+        data_size: u32,
+        data_type: TSDataType,
+        compression: CompressionType,
+        encoding: TSEncoding,
+        num_pages: u32,
+        mask: u8,
+    ) -> ChunkHeader {
         ChunkHeader {
             measurement_id,
             data_size,
@@ -412,14 +428,12 @@ impl ChunkHeader {
             compression,
             encoding,
             num_pages,
-            mask
+            mask,
         }
     }
 }
 
-impl ChunkHeader {
-
-}
+impl ChunkHeader {}
 
 impl ChunkWriter {
     pub fn new(
@@ -516,13 +530,19 @@ pub struct ChunkMetadata {
 }
 
 impl ChunkMetadata {
-    pub(crate) fn new(measurement_id: String, data_type: TSDataType, position: u64, statistics: Statistics, mask: u8) -> ChunkMetadata {
+    pub(crate) fn new(
+        measurement_id: String,
+        data_type: TSDataType,
+        position: u64,
+        statistics: Statistics,
+        mask: u8,
+    ) -> ChunkMetadata {
         ChunkMetadata {
             measurement_id,
             data_type,
             mask,
             offset_of_chunk_header: position as i64,
-            statistics
+            statistics,
         }
     }
 }

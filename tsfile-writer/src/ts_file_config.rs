@@ -18,7 +18,7 @@ impl Default for TsFileConfig {
             max_bloom_filter_error_rate: 0.1,
             minimal_size: 256,
             maximal_hash_function_size: 8,
-            seeds: [5, 7, 11, 19, 31, 37, 43, 59]
+            seeds: [5, 7, 11, 19, 31, 37, 43, 59],
         }
     }
 }

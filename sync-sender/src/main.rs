@@ -1,21 +1,23 @@
 // generated Rust module from Thrift IDL
-mod sync;
 mod mlog;
+mod sync;
 
+use crate::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
+use pnet::datalink;
+use sha2::Digest;
 use std::fs;
 use std::io::Write;
 use std::thread::sleep;
 use std::time::Duration;
-use pnet::datalink;
-use thrift::protocol::{TBinaryInputProtocol, TBinaryOutputProtocol, TCompactInputProtocol, TCompactOutputProtocol};
-use thrift::protocol::{TInputProtocol, TOutputProtocol};
 use thrift::protocol::TType::String;
+use thrift::protocol::{
+    TBinaryInputProtocol, TBinaryOutputProtocol, TCompactInputProtocol, TCompactOutputProtocol,
+};
+use thrift::protocol::{TInputProtocol, TOutputProtocol};
 use thrift::transport::{TFramedReadTransport, TFramedWriteTransport};
 use thrift::transport::{TIoChannel, TTcpChannel};
 use thrift::TThriftClient;
 use uuid::Uuid;
-use crate::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
-use sha2::Digest;
 
 // TODO what is this?
 const PARTITION_INTERVAL: i64 = 604800;
@@ -41,12 +43,8 @@ fn run() -> thrift::Result<()> {
 
     let (i_chan, o_chan) = c.split()?;
 
-    let i_prot = TBinaryInputProtocol::new(
-        TFramedReadTransport::new(i_chan), false,
-    );
-    let o_prot = TBinaryOutputProtocol::new(
-        TFramedWriteTransport::new(o_chan), false,
-    );
+    let i_prot = TBinaryInputProtocol::new(TFramedReadTransport::new(i_chan), false);
+    let o_prot = TBinaryOutputProtocol::new(TFramedWriteTransport::new(o_chan), false);
 
     let mut client = SyncServiceSyncClient::new(i_prot, o_prot);
 
@@ -56,9 +54,10 @@ fn run() -> thrift::Result<()> {
 
     // GET Info
     let ip = datalink::interfaces().get(0).map(|interface| {
-        interface.ips.get(0).map_or_else(|| { std::string::String::from("127.0.0.1") }, |ip| {
-            ip.ip().to_string()
-        })
+        interface.ips.get(0).map_or_else(
+            || std::string::String::from("127.0.0.1"),
+            |ip| ip.ip().to_string(),
+        )
     });
 
     // Read UUID
@@ -133,7 +132,9 @@ fn run() -> thrift::Result<()> {
     // Example path: data/data/sequence/root.sg1/0/0/xxx.tsfile
     let filename = "0_0_1654074550252-1-0-0.tsfile";
 
-    client.init_sync_data(std::string::String::from(filename)).expect("");
+    client
+        .init_sync_data(std::string::String::from(filename))
+        .expect("");
     let bytes = fs::read("../1654074550252-1-0-0.tsfile").expect("");
     client.sync_data(bytes.clone()).expect("");
     let digest = calculate_digest(&bytes);
@@ -165,10 +166,10 @@ fn calculate_digest(writer: &Vec<u8>) -> std::string::String {
     digest
 }
 
-use tsfile_writer::TSDataType;
-use tsfile_writer::encoding::TSEncoding;
-use tsfile_writer::compression::CompressionType;
 use crate::mlog::MLog;
+use tsfile_writer::compression::CompressionType;
+use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::TSDataType;
 
 pub fn write_mlog() -> Vec<u8> {
     // Create the mlog
@@ -178,7 +179,12 @@ pub fn write_mlog() -> Vec<u8> {
     m_log.set_storage_group_plan("root.sg");
     m_log.flush(&mut mlog_buffer);
 
-    m_log.create_plan("root.sg.d1.s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
+    m_log.create_plan(
+        "root.sg.d1.s1",
+        TSDataType::INT32,
+        TSEncoding::PLAIN,
+        CompressionType::UNCOMPRESSED,
+    );
     m_log.flush(&mut mlog_buffer);
 
     return mlog_buffer;

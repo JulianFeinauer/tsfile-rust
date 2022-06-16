@@ -1,5 +1,5 @@
-use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType, TsFileError};
 use crate::utils::size_var_u32;
+use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType, TsFileError};
 
 #[derive(Clone, Debug)]
 pub enum Statistics {
@@ -13,7 +13,7 @@ impl Statistics {
         match self {
             Statistics::INT32(s) => s.count,
             Statistics::INT64(s) => s.count,
-            Statistics::FLOAT(s) => s.count
+            Statistics::FLOAT(s) => s.count,
         }
     }
     pub(crate) fn get_serialized_size(&self) -> u32 {

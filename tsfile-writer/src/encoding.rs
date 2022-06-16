@@ -38,7 +38,7 @@ impl dyn Encoder {
 pub struct PlainIntEncoder<T> {
     // pub(crate) values: Vec<T>,
     pub(crate) buffer: Vec<u8>,
-    phantom_data: PhantomData<T>
+    phantom_data: PhantomData<T>,
 }
 
 impl Encoder for PlainIntEncoder<f32> {
@@ -46,7 +46,7 @@ impl Encoder for PlainIntEncoder<f32> {
         match value {
             IoTDBValue::FLOAT(v) => {
                 self.buffer.write(&(v.to_be_bytes()));
-            },
+            }
             _ => panic!("Something went wrong!"),
         }
     }
@@ -72,7 +72,7 @@ impl Encoder for PlainIntEncoder<i32> {
         match value {
             IoTDBValue::INT(v) => {
                 utils::write_var_i32(*v, &mut self.buffer);
-            },
+            }
             _ => panic!("Something went wrong!"),
         }
     }
@@ -98,7 +98,7 @@ impl Encoder for PlainIntEncoder<i64> {
         match value {
             IoTDBValue::LONG(v) => {
                 self.buffer.write(&v.to_be_bytes());
-            }, // self.values.push(*v),
+            } // self.values.push(*v),
             _ => panic!("Something went wrong!"),
         }
     }
@@ -135,7 +135,7 @@ impl<T> PlainIntEncoder<T> {
     pub(crate) fn new() -> PlainIntEncoder<T> {
         Self {
             buffer: Vec::new(),
-            phantom_data: PhantomData::default()
+            phantom_data: PhantomData::default(),
         }
     }
 }

@@ -62,13 +62,19 @@
 mod testsabc {
     use std::env::current_dir;
 
-    use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
     use crate::test_utils::{validate_output, write_ts_file};
+    use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
 
     // 30 MIO DP pro 45 sek -> 666666 / s -> 666.666 / ms
     #[test]
     fn flush_chunk() {
-        let schema = Schema::simple("d1", "s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
+        let schema = Schema::simple(
+            "d1",
+            "s",
+            TSDataType::INT64,
+            TSEncoding::PLAIN,
+            CompressionType::UNCOMPRESSED,
+        );
 
         write_ts_file("target/benchmark.tsfile", schema, |writer| {
             for i in 0..30000001 {
@@ -134,6 +140,14 @@ file length: 245835939
 			[MetadataIndex:LEAF_MEASUREMENT]
 			└──────[s,245835642]
 ---------------------------------- TsFile Sketch End ----------------------------------";
-        validate_output(current_dir().unwrap().join("target/benchmark.tsfile").as_path().to_str().unwrap(), expected_structure);
+        validate_output(
+            current_dir()
+                .unwrap()
+                .join("target/benchmark.tsfile")
+                .as_path()
+                .to_str()
+                .unwrap(),
+            expected_structure,
+        );
     }
 }

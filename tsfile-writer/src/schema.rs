@@ -7,14 +7,17 @@ pub struct TsFileSchemaBuilder<'a> {
 
 impl<'a> TsFileSchemaBuilder<'a> {
     pub fn new() -> TsFileSchemaBuilder<'a> {
-        TsFileSchemaBuilder{
+        TsFileSchemaBuilder {
             measurement_groups_map: HashMap::new(),
         }
     }
 
-    pub fn add(&mut self, device: &'a str, schema: MeasurementGroup<'a>) -> &mut TsFileSchemaBuilder<'a> {
-        self.measurement_groups_map
-            .insert(device, schema);
+    pub fn add(
+        &mut self,
+        device: &'a str,
+        schema: MeasurementGroup<'a>,
+    ) -> &mut TsFileSchemaBuilder<'a> {
+        self.measurement_groups_map.insert(device, schema);
         self
     }
 

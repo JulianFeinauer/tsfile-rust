@@ -1,29 +1,27 @@
-use std::borrow::Borrow;
 use crate::chunk_writer::ChunkWriter;
-use crate::group_writer::GroupWriter;
-use crate::{
-    ChunkGroupMetadata, IoTDBValue,
-    PositionedWrite, Schema, TimeSeriesMetadatable,
-    WriteWrapper,
-};
-use std::collections::{BTreeMap, HashMap};
-use std::fs::{create_dir_all, File};
 use crate::errors::TsFileError;
+use crate::group_writer::GroupWriter;
 use crate::ts_file_config::TsFileConfig;
 use crate::tsfile_io_writer::TsFileIoWriter;
+use crate::{
+    ChunkGroupMetadata, IoTDBValue, PositionedWrite, Schema, TimeSeriesMetadatable, WriteWrapper,
+};
+use std::borrow::Borrow;
+use std::collections::{BTreeMap, HashMap};
+use std::fs::{create_dir_all, File};
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
 pub struct DataPoint<'a> {
     pub(crate) measurement_id: &'a str,
-    pub(crate) value: IoTDBValue
+    pub(crate) value: IoTDBValue,
 }
 
 impl<'a> DataPoint<'a> {
     pub fn new(measurement_id: &'a str, value: IoTDBValue) -> DataPoint<'a> {
         Self {
             measurement_id,
-            value
+            value,
         }
     }
 }
@@ -42,7 +40,7 @@ pub struct TsFileWriter<'a, T: PositionedWrite> {
     non_aligned_timeseries_last_time_map: BTreeMap<&'a str, BTreeMap<&'a str, i64>>,
     pub schema: Schema<'a>,
     #[allow(dead_code)]
-    config: TsFileConfig
+    config: TsFileConfig,
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
@@ -67,7 +65,9 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 self.record_count += records_written;
             }
             None => {
-                return Err(TsFileError::IllegalState { source: Some("No Group Writer found".to_owned())});
+                return Err(TsFileError::IllegalState {
+                    source: Some("No Group Writer found".to_owned()),
+                });
             }
         }
         self.check_memory_size_and_may_flush_chunks();
@@ -85,9 +85,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 let records_written = group.write_many(timestamp, values)?;
                 self.record_count += records_written;
             }
-            None => {
-                return Err(TsFileError::IllegalState { source: None })
-            }
+            None => return Err(TsFileError::IllegalState { source: None }),
         }
         self.check_memory_size_and_may_flush_chunks();
         Ok(())
@@ -97,17 +95,29 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         if self.record_count >= self.record_count_for_next_mem_check {
             let mem_size = self.calculate_mem_size_for_all_groups();
             log::trace!("Memcount calculated: {}", mem_size);
-            log::trace!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
+            log::trace!(
+                "{:.2?}% - {} / {} for flushing",
+                mem_size as f64 / CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0,
+                mem_size,
+                CHUNK_GROUP_SIZE_THRESHOLD_BYTE
+            );
             if mem_size > CHUNK_GROUP_SIZE_THRESHOLD_BYTE {
                 self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
-                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64
+                    / mem_size as u64)
+                    as u32;
                 return self.flush_all_chunk_groups();
             } else {
                 // println!("Record Count: {}, CHUNK_GROUP_SIZE_THRESHOLD_BYTE: {}, memsize: {}", self.record_count_for_next_mem_check, CHUNK_GROUP_SIZE_THRESHOLD_BYTE, mem_size);
                 // in the java impl there can be an overflow...
                 self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
-                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
-                log::trace!("Next record count for check {}", self.record_count_for_next_mem_check);
+                    * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64
+                    / mem_size as u64)
+                    as u32;
+                log::trace!(
+                    "Next record count for check {}",
+                    self.record_count_for_next_mem_check
+                );
                 return Ok(false);
             }
         }
@@ -124,12 +134,15 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 let data_size = group_writer.flush_to_filewriter(&mut self.file_io_writer);
 
                 if self.file_io_writer.out.get_position() - pos != data_size {
-                    return Err(TsFileError::IllegalState { source: Some("Bytes written are not as expected!".to_owned()) });
+                    return Err(TsFileError::IllegalState {
+                        source: Some("Bytes written are not as expected!".to_owned()),
+                    });
                 }
 
                 self.file_io_writer.end_chunk_group();
 
-                self.non_aligned_timeseries_last_time_map.insert(device_id, group_writer.get_last_time_map());
+                self.non_aligned_timeseries_last_time_map
+                    .insert(device_id, group_writer.get_last_time_map());
             }
             self.reset();
         }
@@ -176,7 +189,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                                 )
                             })
                             .collect(),
-                        last_time_map: BTreeMap::new()
+                        last_time_map: BTreeMap::new(),
                     },
                 )
             })
@@ -186,27 +199,35 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
-    pub fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> Result<TsFileWriter<'a, WriteWrapper<File>>, TsFileError> {
+    pub fn new(
+        filename: &'a str,
+        schema: Schema<'a>,
+        config: TsFileConfig,
+    ) -> Result<TsFileWriter<'a, WriteWrapper<File>>, TsFileError> {
         // Create directory, if not exists
         let folder = match std::path::Path::new(filename).parent() {
             Some(f) => f,
             None => {
-                return Err(TsFileError::Error {source: None});
+                return Err(TsFileError::Error { source: None });
             }
         };
         create_dir_all(folder);
         // Create the file
-        let file =
-            WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
+        let file = WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
 
         TsFileWriter::new_from_writer(filename, schema, file, config)
     }
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
-
-    pub(crate) fn new_from_writer(filename: &'a str, schema: Schema<'a>, file_writer: T, config: TsFileConfig) -> Result<TsFileWriter<'a, T>, TsFileError> {
-        let group_writers = schema.clone()
+    pub(crate) fn new_from_writer(
+        filename: &'a str,
+        schema: Schema<'a>,
+        file_writer: T,
+        config: TsFileConfig,
+    ) -> Result<TsFileWriter<'a, T>, TsFileError> {
+        let group_writers = schema
+            .clone()
             .measurement_groups
             .into_iter()
             .map(|(path, v)| {
@@ -229,7 +250,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                                 )
                             })
                             .collect(),
-                        last_time_map: BTreeMap::new()
+                        last_time_map: BTreeMap::new(),
                     },
                 )
             })

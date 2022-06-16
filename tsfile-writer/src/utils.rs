@@ -30,8 +30,8 @@ pub fn size_var_u32(num: u32) -> u8 {
     let mut position = 1;
     let mut value = num;
     while (value & 0xFFFFFF80) != 0 {
-      value >>= 7;
-      position += 1;
+        value >>= 7;
+        position += 1;
     }
     position
 }
@@ -63,4 +63,3 @@ pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     }
     value | ((b as u32) << i)
 }
-

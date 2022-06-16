@@ -1,7 +1,11 @@
-use std::collections::{BTreeMap};
-use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileConfig, TsFileMetadata};
 use crate::chunk_writer::ChunkHeader;
 use crate::errors::TsFileError;
+use crate::{
+    BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType,
+    MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TSDataType, TSEncoding,
+    TimeSeriesMetadata, TimeSeriesMetadatable, TsFileConfig, TsFileMetadata,
+};
+use std::collections::BTreeMap;
 
 pub struct TsFileIoWriter<'a, T: PositionedWrite> {
     config: TsFileConfig,
@@ -28,8 +32,24 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
-    pub(crate) fn start_flush_chunk(&mut self, measurement_id: String, compression: CompressionType, data_type: TSDataType, encoding: TSEncoding, statistics: Statistics, data_size: u32, num_pages: u32, mask: u8) {
-        self.current_chunk_metadata = Some(ChunkMetadata::new(measurement_id.clone(), data_type, self.out.get_position(), statistics, mask));
+    pub(crate) fn start_flush_chunk(
+        &mut self,
+        measurement_id: String,
+        compression: CompressionType,
+        data_type: TSDataType,
+        encoding: TSEncoding,
+        statistics: Statistics,
+        data_size: u32,
+        num_pages: u32,
+        mask: u8,
+    ) {
+        self.current_chunk_metadata = Some(ChunkMetadata::new(
+            measurement_id.clone(),
+            data_type,
+            self.out.get_position(),
+            statistics,
+            mask,
+        ));
         let header = ChunkHeader::new(
             measurement_id,
             data_size,
@@ -37,14 +57,17 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             compression,
             encoding,
             num_pages,
-            mask
+            mask,
         );
         header.serialize(&mut self.out);
     }
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
-    pub(crate) fn new(writer: T, config: TsFileConfig) -> Result<TsFileIoWriter<'a, T>, TsFileError> {
+    pub(crate) fn new(
+        writer: T,
+        config: TsFileConfig,
+    ) -> Result<TsFileIoWriter<'a, T>, TsFileError> {
         let mut io_writer = TsFileIoWriter {
             config,
             out: writer,
@@ -58,14 +81,18 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         Ok(io_writer)
     }
 
-    fn start_file(&mut self) -> Result<(), TsFileError>{
+    fn start_file(&mut self) -> Result<(), TsFileError> {
         self.out.write("TsFile".as_bytes())?;
         self.out.write(&[0x03])?;
         Ok(())
     }
 
-    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) -> Result<(), TsFileError>{
-        log::info!("Start chunk group:{}, file position {}", &device_id, self.out.get_position());
+    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) -> Result<(), TsFileError> {
+        log::info!(
+            "Start chunk group:{}, file position {}",
+            &device_id,
+            self.out.get_position()
+        );
         let chunk_group_header = ChunkGroupHeader::new(device_id);
         chunk_group_header.serialize(&mut self.out)?;
 
@@ -94,7 +121,10 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         //         chunk_metadata.clone()
         //     )
         // }
-        self.chunk_group_metadata_list.push(ChunkGroupMetadata::new(device_id.into(), self.chunk_metadata_list.clone()));
+        self.chunk_group_metadata_list.push(ChunkGroupMetadata::new(
+            device_id.into(),
+            self.chunk_metadata_list.clone(),
+        ));
         self.current_chunk_group_device_id = None;
         self.chunk_metadata_list.clear();
         self.out.flush();
@@ -146,10 +176,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 
         // Now serialize the Bloom Filter ?!
 
-        let paths = chunk_metadata_map
-            .keys()
-            .into_iter().cloned()
-            .collect();
+        let paths = chunk_metadata_map.keys().into_iter().cloned().collect();
 
         let bloom_filter = BloomFilter::build(paths, &self.config);
 
@@ -172,11 +199,12 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             // TODO do we really need this check here?
             // ensure that paths are printed in alphabetical order
             match &last_path {
-                None => {
-                    last_path = Some(path.path.clone())
-                }
+                None => last_path = Some(path.path.clone()),
                 Some(p) => {
-                    assert!(p < &path.path, "Something went wrong.. footer was written in wrong order");
+                    assert!(
+                        p < &path.path,
+                        "Something went wrong.. footer was written in wrong order"
+                    );
                 }
             }
             // Now regular operation starts
@@ -236,6 +264,10 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         //     println!("Device: {}", device);
         // }
 
-        MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out, &self.config)
+        MetadataIndexNode::construct_metadata_index(
+            &self.timeseries_metadata_map,
+            &mut self.out,
+            &self.config,
+        )
     }
 }
