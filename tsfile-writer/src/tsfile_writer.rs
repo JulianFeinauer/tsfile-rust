@@ -126,10 +126,10 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
     fn flush_all_chunk_groups(&mut self) -> Result<bool, TsFileError> {
         if self.record_count > 0 {
-            for (device_id, group_writer) in self.group_writers.iter_mut() {
+            for (&device_id, group_writer) in self.group_writers.iter_mut() {
                 // self.file_writer.start_chunk_group(device_id);
                 // self.file_writer
-                self.file_io_writer.start_chunk_group(device_id.clone())?;
+                self.file_io_writer.start_chunk_group(device_id)?;
                 let pos = self.file_io_writer.out.get_position();
                 let data_size = group_writer.flush_to_filewriter(&mut self.file_io_writer);
 
@@ -177,9 +177,9 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
-                            .map(|(measurement_id, measurement_schema)| {
+                            .map(|(&measurement_id, measurement_schema)| {
                                 (
-                                    measurement_id.clone(),
+                                    measurement_id,
                                     ChunkWriter::new(
                                         measurement_id,
                                         measurement_schema.data_type,
@@ -213,7 +213,7 @@ impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
         };
         create_dir_all(folder);
         // Create the file
-        let file = WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
+        let file = WriteWrapper::new(File::create(filename).expect("create failed"));
 
         TsFileWriter::new_from_writer(filename, schema, file, config)
     }
@@ -238,11 +238,11 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
-                            .map(|(measurement_id, measurement_schema)| {
+                            .map(|(&measurement_id, measurement_schema)| {
                                 (
-                                    measurement_id.clone(),
+                                    measurement_id,
                                     ChunkWriter::new(
-                                        measurement_id.clone(),
+                                        measurement_id,
                                         measurement_schema.data_type,
                                         measurement_schema.compression,
                                         measurement_schema.encoding,

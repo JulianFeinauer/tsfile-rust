@@ -2,6 +2,7 @@ use crate::utils::size_var_u32;
 use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType, TsFileError};
 
 #[derive(Clone, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Statistics {
     INT32(StatisticsStruct<i32, i64>),
     INT64(StatisticsStruct<i64, f64>),

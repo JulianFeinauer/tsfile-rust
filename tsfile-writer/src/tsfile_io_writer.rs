@@ -32,6 +32,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn start_flush_chunk(
         &mut self,
         measurement_id: String,
@@ -82,8 +83,8 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     }
 
     fn start_file(&mut self) -> Result<(), TsFileError> {
-        self.out.write("TsFile".as_bytes())?;
-        self.out.write(&[0x03])?;
+        self.out.write_all("TsFile".as_bytes())?;
+        self.out.write_all(&[0x03])?;
         Ok(())
     }
 
@@ -230,7 +231,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
                 time_series_metadata_type: match serialize_statistic {
                     true => 1,
                     false => 0,
-                } | &metadata.get(0).unwrap().mask,
+                } | metadata.get(0).unwrap().mask,
                 chunk_meta_data_list_data_size: buffer.len(),
                 measurement_id: metadata.get(0).unwrap().measurement_id.to_owned(),
                 data_type,

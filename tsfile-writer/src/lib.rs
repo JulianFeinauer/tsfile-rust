@@ -709,11 +709,11 @@ pub trait Serializable {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError>;
 }
 
-fn write_str<'a>(file: &mut dyn PositionedWrite, s: &str) -> Result<(), TsFileError> {
+fn write_str(file: &mut dyn PositionedWrite, s: &str) -> Result<(), TsFileError> {
     let len = s.len() as i32;
     write_var_i32(len, file)?;
     let bytes = s.as_bytes();
-    file.write(bytes)?; // measurement id
+    file.write_all(bytes)?; // measurement id
     Ok(())
 }
 
@@ -956,7 +956,7 @@ mod tests {
             // Write it
             write_var_u32(number, &mut result);
             // Read it back
-            let result: u32 = read_var_u32(&mut result.as_slice());
+            let result: u32 = read_var_u32(&mut result.as_slice()).unwrap();
 
             assert_eq!(number, result);
         }
