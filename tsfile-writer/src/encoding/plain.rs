@@ -1,7 +1,7 @@
 use crate::encoding::Encoder;
 use crate::TSDataType;
 use crate::{utils, IoTDBValue, PositionedWrite};
-use std::cmp::max;
+
 use std::io::Write;
 use std::marker::PhantomData;
 

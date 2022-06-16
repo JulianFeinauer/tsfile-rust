@@ -117,47 +117,46 @@ impl ChunkWriter {
         }
     }
 
-    // This method is used?!
-    #[allow(dead_code)]
-    pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
-        // Before we can write the header we have to serialize the current page
-        self.write_page_to_buffer();
-
-        // Chunk Header
-        // store offset for metadata
-        self.offset_of_chunk_header = Some(file.get_position());
-
-        // Marker
-        // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
-        let marker = if self.num_pages <= 1 {
-            ONLY_ONE_PAGE_CHUNK_HEADER
-        } else {
-            CHUNK_HEADER
-        };
-        let marker = marker | self.mask;
-        file.write(&[marker]).expect("write failed"); // Marker
-
-        write_str(file, self.measurement_id.as_str());
-        // Data Length
-        utils::write_var_u32(self.page_buffer.len() as u32, file);
-        // Data Type INT32 -> 1
-        file.write(&[self.data_type.serialize()])
-            .expect("write failed");
-        // Compression Type UNCOMPRESSED -> 0
-        file.write(&[self.compression_type.serialize()])
-            .expect("write failed");
-        // Encoding PLAIN -> 0
-        file.write(&[self.encoding.serialize()])
-            .expect("write failed");
-        // End Chunk Header
-
-        log::trace!("Dumping pages at offset {}", file.get_position());
-
-        // Write the full page
-        file.write_all(&self.page_buffer);
-
-        log::trace!("Offset after {}", file.get_position());
-    }
+    // // This method is used?!
+    // #[allow(dead_code)]
+    // pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
+    //     // Before we can write the header we have to serialize the current page
+    //     self.write_page_to_buffer();
+    //
+    //     // Chunk Header
+    //     // store offset for metadata
+    //     self.offset_of_chunk_header = Some(file.get_position());
+    //
+    //     // Marker
+    //     // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
+    //     let marker = if self.num_pages <= 1 {
+    //         ONLY_ONE_PAGE_CHUNK_HEADER
+    //     } else {
+    //         CHUNK_HEADER
+    //     };
+    //     let marker = marker | self.mask;
+    //     file.write(&[marker])?; // Marker
+    //
+    //     write_str(file, self.measurement_id.as_str())?;
+    //     // Data Length
+    //     utils::write_var_u32(self.page_buffer.len() as u32, file)?;
+    //     // Data Type INT32 -> 1
+    //     file.write(&[self.data_type.serialize()])?;
+    //     // Compression Type UNCOMPRESSED -> 0
+    //     file.write_all(&[self.compression_type.serialize()])?;
+    //     // Encoding PLAIN -> 0
+    //     file.write_all(&[self.encoding.serialize()])?;
+    //     // End Chunk Header
+    //
+    //     log::trace!("Dumping pages at offset {}", file.get_position());
+    //
+    //     // Write the full page
+    //     file.write_all(&self.page_buffer)?;
+    //
+    //     log::trace!("Offset after {}", file.get_position());
+    //
+    //     Ok(())
+    // }
 
     // This method is used?!
     #[allow(dead_code)]
@@ -356,85 +355,82 @@ impl ChunkWriter {
     //   }
     // }
     fn write_page_to_buffer(&mut self) -> Result<(), TsFileError> {
-        match self.current_page_writer.as_mut() {
-            Some(page_writer) => {
-                page_writer.prepare_buffer();
+        if let Some(page_writer) = self.current_page_writer.as_mut() {
+            page_writer.prepare_buffer();
 
-                let buffer_size: u32 = page_writer.buffer.len() as u32;
+            let buffer_size: u32 = page_writer.buffer.len() as u32;
 
-                let uncompressed_bytes = buffer_size;
-                // We have no compression!
-                let compressed_bytes = uncompressed_bytes;
+            let uncompressed_bytes = buffer_size;
+            // We have no compression!
+            let compressed_bytes = uncompressed_bytes;
 
-                // TODO we need a change here if multiple pages exist
-                if self.num_pages == 0 {
-                    // Uncompressed size
-                    self.size_without_statistics +=
-                        utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer)?
-                            as usize;
-                    // Compressed size
-                    self.size_without_statistics +=
-                        utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)?
-                            as usize;
+            // TODO we need a change here if multiple pages exist
+            if self.num_pages == 0 {
+                // Uncompressed size
+                self.size_without_statistics +=
+                    utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer)?
+                        as usize;
+                // Compressed size
+                self.size_without_statistics +=
+                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)?
+                        as usize;
 
-                    // Write page content
-                    self.page_buffer.write_all(&page_writer.buffer);
-                    page_writer.buffer.clear();
+                // Write page content
+                self.page_buffer.write_all(&page_writer.buffer);
+                page_writer.buffer.clear();
 
-                    self.first_page_statistics = Some(page_writer.statistics.clone())
-                } else if self.num_pages == 1 {
-                    let temp = self.page_buffer.clone();
-                    self.page_buffer.clear();
+                self.first_page_statistics = Some(page_writer.statistics.clone())
+            } else if self.num_pages == 1 {
+                let temp = self.page_buffer.clone();
+                self.page_buffer.clear();
 
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
-                    let header_bytes = &temp[0..self.size_without_statistics];
-                    self.page_buffer.write_all(header_bytes);
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
-                    match &self.first_page_statistics {
-                        Some(stat) => stat.serialize(&mut self.page_buffer),
-                        _ => panic!("This should not happen!"),
-                    };
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
-                    let remainder_bytes = &temp[self.size_without_statistics..];
-                    self.page_buffer.write_all(remainder_bytes);
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
-                    // Uncompressed size
-                    utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
-                    // Compressed size
-                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
-                    // Write page content
-                    log::trace!("Statistics: {:?}", &page_writer.statistics);
-                    page_writer.statistics.serialize(&mut self.page_buffer);
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                let header_bytes = &temp[0..self.size_without_statistics];
+                self.page_buffer.write_all(header_bytes);
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                match &self.first_page_statistics {
+                    Some(stat) => stat.serialize(&mut self.page_buffer),
+                    _ => panic!("This should not happen!"),
+                };
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                let remainder_bytes = &temp[self.size_without_statistics..];
+                self.page_buffer.write_all(remainder_bytes);
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                // Uncompressed size
+                utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
+                // Compressed size
+                utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                // Write page content
+                log::trace!("Statistics: {:?}", &page_writer.statistics);
+                page_writer.statistics.serialize(&mut self.page_buffer);
 
-                    log::trace!(
+                log::trace!(
                         "Flushing page at page buffer offset {}",
                         self.page_buffer.get_position()
                     );
 
-                    self.page_buffer.write_all(&page_writer.buffer);
+                self.page_buffer.write_all(&page_writer.buffer);
 
-                    log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
+                log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
 
-                    page_writer.buffer.clear();
-                    self.first_page_statistics = None;
-                } else {
-                    // Uncompressed size
-                    utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
-                    // Compressed size
-                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
-                    // Write page content
-                    page_writer.statistics.serialize(&mut self.page_buffer);
-                    self.page_buffer.write_all(&page_writer.buffer);
-                    log::trace!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
-                    page_writer.buffer.clear();
-                }
-                self.num_pages += 1;
-                self.statistics.merge(&page_writer.statistics);
-                page_writer.reset();
+                page_writer.buffer.clear();
+                self.first_page_statistics = None;
+            } else {
+                // Uncompressed size
+                utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
+                // Compressed size
+                utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer);
+                // Write page content
+                page_writer.statistics.serialize(&mut self.page_buffer);
+                self.page_buffer.write_all(&page_writer.buffer);
+                log::trace!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
+                page_writer.buffer.clear();
             }
-            _ => {}
-        };
+            self.num_pages += 1;
+            self.statistics.merge(&page_writer.statistics);
+            page_writer.reset();
+        }
 
         Ok(())
     }
@@ -451,7 +447,7 @@ pub struct ChunkHeader {
 }
 
 impl ChunkHeader {
-    pub(crate) fn serialize<T: PositionedWrite>(&self, file_writer: &mut T) {
+    pub(crate) fn serialize<T: PositionedWrite>(&self, file_writer: &mut T) -> Result<(), TsFileError> {
         // Marker
         // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
         let marker = if self.num_pages <= 1 {
@@ -460,24 +456,22 @@ impl ChunkHeader {
             CHUNK_HEADER
         };
         let marker = marker | self.mask;
-        file_writer.write(&[marker]).expect("write failed"); // Marker
+        file_writer.write_all(&[marker])?; // Marker
 
-        write_str(file_writer, self.measurement_id.as_str());
+        write_str(file_writer, self.measurement_id.as_str())?;
         // Data Length
-        utils::write_var_u32(self.data_size, file_writer);
+        utils::write_var_u32(self.data_size, file_writer)?;
         // Data Type INT32 -> 1
         file_writer
-            .write(&[self.data_type.serialize()])
-            .expect("write failed");
+            .write_all(&[self.data_type.serialize()])?;
         // Compression Type UNCOMPRESSED -> 0
         file_writer
-            .write(&[self.compression.serialize()])
-            .expect("write failed");
+            .write_all(&[self.compression.serialize()])?;
         // Encoding PLAIN -> 0
         file_writer
-            .write(&[self.encoding.serialize()])
-            .expect("write failed");
+            .write_all(&[self.encoding.serialize()])?;
         // End Chunk Header
+        Ok(())
     }
 
     pub(crate) fn new(

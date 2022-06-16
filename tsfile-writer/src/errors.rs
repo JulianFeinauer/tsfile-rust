@@ -17,14 +17,8 @@ impl PartialEq for TsFileError {
                 _ => false,
             },
             TsFileError::IoError { .. } => false,
-            TsFileError::WriteError => match other {
-                TsFileError::WriteError => true,
-                _ => false,
-            },
-            TsFileError::OutOfOrderData => match other {
-                TsFileError::OutOfOrderData => true,
-                _ => false,
-            },
+            TsFileError::WriteError => matches!(other, TsFileError::WriteError),
+            TsFileError::OutOfOrderData => matches!(other, TsFileError::OutOfOrderData),
             TsFileError::IllegalState { source: a } => match other {
                 TsFileError::IllegalState { source: b } => a == b,
                 _ => false,

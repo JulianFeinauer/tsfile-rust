@@ -49,6 +49,7 @@ impl TimeEncoder {
         width
     }
 
+    #[allow(unused_variables)]
     pub(crate) fn long_to_bytes(number: i64, result: &mut Vec<u8>, pos: usize, width: u32) {
         let mut cnt = (pos & 0x07) as u8;
         let mut index = pos >> 3;
@@ -135,9 +136,9 @@ impl TimeEncoder {
 
         // now we can drop the long-to-bytes values here
         let mut payload_buffer = vec![];
-        for i in 0..delta_block_buffer.len() {
+        for (i, buffer) in delta_block_buffer.iter().enumerate() {
             Self::long_to_bytes(
-                delta_block_buffer[i],
+                *buffer,
                 &mut payload_buffer,
                 (i * write_width as usize) as usize,
                 write_width,

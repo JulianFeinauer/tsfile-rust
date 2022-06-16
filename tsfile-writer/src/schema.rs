@@ -32,6 +32,12 @@ impl<'a> TsFileSchemaBuilder<'a> {
     }
 }
 
+impl<'a> Default for TsFileSchemaBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct DeviceBuilder<'a> {
     measurement_groups_map: HashMap<&'a str, MeasurementSchema>,
 }
@@ -72,6 +78,12 @@ impl<'a> DeviceBuilder<'a> {
         MeasurementGroup {
             measurement_schemas,
         }
+    }
+}
+
+impl<'a> Default for DeviceBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
