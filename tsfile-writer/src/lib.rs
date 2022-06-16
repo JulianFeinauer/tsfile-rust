@@ -36,6 +36,7 @@ mod tsfile_io_writer;
 pub mod tsfile_writer;
 mod utils;
 
+/// Central enum to pass Values to the writer
 #[allow(dead_code)]
 pub enum IoTDBValue {
     DOUBLE(f64),
