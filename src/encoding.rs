@@ -2,6 +2,7 @@ use crate::TSDataType;
 use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
+use std::marker::PhantomData;
 use crate::utils::{size_var_i32};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -40,69 +41,66 @@ impl dyn Encoder {
 }
 
 pub struct PlainIntEncoder<T> {
-    pub(crate) values: Vec<T>,
+    // pub(crate) values: Vec<T>,
     pub(crate) buffer: Vec<u8>,
+    phantom_data: PhantomData<T>
 }
 
 impl<T> PlainIntEncoder<T> {
     pub(crate) fn reset(&mut self) {
-        self.values.clear()
+        self.buffer.clear()
     }
 }
 
 impl Encoder for PlainIntEncoder<f32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
-            IoTDBValue::FLOAT(v) => self.values.push(*v),
+            IoTDBValue::FLOAT(v) => {
+                self.buffer.write(&(v.to_be_bytes()));
+            },
             _ => panic!("Something went wrong!"),
         }
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        for val in &self.values {
-            buffer.write_all(&val.to_be_bytes());
-        }
+        buffer.write(&self.buffer);
     }
     fn get_max_byte_size(&self) -> u32 {
         // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        (24 + self.values.len() * 8) as u32
+        // (24 + self.buffer.len()) as u32
+        0
     }
     fn reset(&mut self) {
-        self.values.clear()
+        self.buffer.clear();
     }
 
     fn size(&mut self) -> u32 {
-        (&self.values.len() * 4) as u32
+        self.buffer.len() as u32
     }
 }
 
 impl Encoder for PlainIntEncoder<i32> {
     fn write(&mut self, value: &IoTDBValue) {
         match value {
-            IoTDBValue::INT(v) => self.values.push(*v),
+            IoTDBValue::INT(v) => {
+                utils::write_var_i32(*v, &mut self.buffer);
+            },
             _ => panic!("Something went wrong!"),
         }
     }
     fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        for val in &self.values {
-            // Do the encoding into writeVarInt
-            utils::write_var_i32(*val, buffer);
-        }
+        buffer.write(&self.buffer);
     }
 
     fn get_max_byte_size(&self) -> u32 {
         // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-        (24 + self.values.len() * 8) as u32
+        (24 + self.buffer.len()) as u32
     }
     fn reset(&mut self) {
-        self.values.clear()
+        self.buffer.clear();
     }
 
     fn size(&mut self) -> u32 {
-        let mut buffer_size: u32 = 0;
-        for v in &self.values {
-            buffer_size += size_var_i32(*v) as u32;
-        }
-        return buffer_size
+        return self.buffer.len() as u32;
     }
 }
 
@@ -129,7 +127,6 @@ impl Encoder for PlainIntEncoder<i64> {
         0
     }
     fn reset(&mut self) {
-        self.values.clear();
         self.buffer.clear();
     }
 
@@ -148,8 +145,8 @@ impl PositionedWrite for Vec<u8> {
 impl<T> PlainIntEncoder<T> {
     pub(crate) fn new() -> PlainIntEncoder<T> {
         Self {
-            values: vec![],
-            buffer: Vec::new()
+            buffer: Vec::new(),
+            phantom_data: PhantomData::default()
         }
     }
 }

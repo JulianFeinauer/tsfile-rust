@@ -10,6 +10,7 @@ use crate::utils::{size_var_i32, size_var_u32};
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
+// const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 1500;
 const PAGE_SIZE_THRESHOLD: u32 = 65536;
 const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
@@ -232,7 +233,7 @@ impl ChunkWriter {
         let page_writer = self.current_page_writer.as_mut().unwrap();
         if page_writer.point_number > MAX_NUMBER_OF_POINTS_IN_PAGE {
             self.write_page_to_buffer();
-        } else if page_writer.point_number >= VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK {
+        } else if page_writer.point_number >= self.value_count_in_one_page_for_next_check {
             let current_page_size = page_writer.estimate_max_mem_size();
 
             if current_page_size > PAGE_SIZE_THRESHOLD {
@@ -245,8 +246,11 @@ impl ChunkWriter {
                 self.write_page_to_buffer();
                 self.value_count_in_one_page_for_next_check = MINIMUM_RECORD_COUNT_FOR_CHECK;
             } else {
+                // valueCountInOnePageForNextCheck =
+                //     (int) (((float) pageSizeThreshold / currentPageSize) * pageWriter.getPointNumber());
                 self.value_count_in_one_page_for_next_check =
-                    PAGE_SIZE_THRESHOLD / current_page_size * page_writer.point_number;
+                    ((PAGE_SIZE_THRESHOLD as f32) / (current_page_size as f32) * (page_writer.point_number as f32)) as u32;
+                println!("Value count for next page check {}", self.value_count_in_one_page_for_next_check);
             }
         }
     }
@@ -433,7 +437,7 @@ impl ChunkWriter {
             page_buffer: vec![],
             num_pages: 0,
             first_page_statistics: None,
-            value_count_in_one_page_for_next_check: 0,
+            value_count_in_one_page_for_next_check: VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK,
             size_without_statistics: 0,
         }
     }

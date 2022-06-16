@@ -1,12 +1,13 @@
 #![allow(unused_must_use)]
 extern crate core;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
 use std::{io, vec};
+use std::cmp::Ordering;
 
 use crate::chunk_writer::ChunkMetadata;
 use compression::CompressionType;
@@ -116,6 +117,18 @@ struct Path {
 impl Display for Path {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.path)
+    }
+}
+
+impl Ord for Path {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.path.cmp(&other.path)
+    }
+}
+
+impl PartialOrd<Self> for Path {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.path.partial_cmp(&other.path)
     }
 }
 
@@ -358,7 +371,7 @@ impl MetadataIndexNode {
 
     #[allow(unused_variables)]
     fn construct_metadata_index(
-        device_timeseries_metadata_map: &HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
+        device_timeseries_metadata_map: &BTreeMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
         file: &mut dyn PositionedWrite,
         config: &TsFileConfig
     ) -> MetadataIndexNode {

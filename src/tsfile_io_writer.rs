@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileConfig, TsFileMetadata};
 use crate::chunk_writer::ChunkHeader;
 
@@ -10,7 +10,7 @@ pub struct TsFileIoWriter<'a, T: PositionedWrite> {
     chunk_metadata_list: Vec<ChunkMetadata>,
     current_chunk_metadata: Option<ChunkMetadata>,
     chunk_group_metadata_list: Vec<ChunkGroupMetadata>,
-    timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
+    timeseries_metadata_map: BTreeMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
@@ -52,7 +52,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             chunk_metadata_list: vec![],
             current_chunk_metadata: None,
             chunk_group_metadata_list: vec![],
-            timeseries_metadata_map: HashMap::new(),
+            timeseries_metadata_map: BTreeMap::new(),
         };
         io_writer.start_file();
         return io_writer;
@@ -108,7 +108,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         //     .collect();
 
         // Create metadata list
-        let mut chunk_metadata_map: HashMap<Path, Vec<ChunkMetadata>> = HashMap::new();
+        let mut chunk_metadata_map: BTreeMap<Path, Vec<ChunkMetadata>> = BTreeMap::new();
         for group_metadata in &self.chunk_group_metadata_list {
             for chunk_metadata in &group_metadata.chunk_metadata {
                 let device_path = format!(
@@ -130,6 +130,10 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 
         // Get meta offset
         let meta_offset = self.out.get_position();
+
+        for (p, v) in chunk_metadata_map.iter() {
+            println!("Path: {}", p);
+        }
 
         // Write Marker 0x02
         self.out.write_all(&[0x02]);
@@ -164,9 +168,21 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 
     fn flush_metadata_index(
         &mut self,
-        chunk_metadata_list: &HashMap<Path, Vec<ChunkMetadata>>,
+        chunk_metadata_list: &BTreeMap<Path, Vec<ChunkMetadata>>,
     ) -> MetadataIndexNode {
-        for (path, metadata) in chunk_metadata_list {
+        let mut last_path: Option<String> = None;
+        for (path, metadata) in chunk_metadata_list.iter() {
+            // TODO do we really need this check here?
+            // ensure that paths are printed in alphabetical order
+            match &last_path {
+                None => {
+                    last_path = Some(path.path.clone())
+                }
+                Some(p) => {
+                    assert!(p < &path.path, "Something went wrong.. footer was written in wrong order");
+                }
+            }
+            // Now regular operation starts
             let data_type = metadata.get(0).unwrap().data_type;
             let serialize_statistic = metadata.len() > 1;
             let mut statistics = Statistics::new(data_type);
@@ -217,6 +233,11 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
                 .unwrap()
                 .push(Box::new(timeseries_metadata));
         }
+
+        // println!("Timeseries Metadata Map");
+        // for (device, _) in &self.timeseries_metadata_map {
+        //     println!("Device: {}", device);
+        // }
 
         return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out, &self.config);
     }

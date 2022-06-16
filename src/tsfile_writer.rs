@@ -52,12 +52,14 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 panic!("Unable to find group writer");
             }
         }
+        println!("Records: {}", self.record_count);
         self.check_memory_size_and_may_flush_chunks();
         Ok(())
     }
 
     fn check_memory_size_and_may_flush_chunks(&mut self) -> bool {
         if self.record_count >= self.record_count_for_next_mem_check {
+            println!("Checking memory size on record no: {}", self.record_count);
             let mem_size = self.calculate_mem_size_for_all_groups();
             log::trace!("Memcount calculated: {}", mem_size);
             log::trace!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
