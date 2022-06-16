@@ -16,7 +16,7 @@ pub fn validate_output(filename: &str, expected_structure: &str) {
     assert_eq!(expected_structure, real)
 }
 
-pub fn write_ts_file<'a, F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>) -> ()>(filename: &'a str, schema: Schema<'a>, test_code: F) -> Result<(), TsFileError> {
+pub fn write_ts_file<'a, F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>)>(filename: &'a str, schema: Schema<'a>, test_code: F) -> Result<(), TsFileError> {
     let mut writer = TsFileWriter::new(filename, schema, Default::default())?;
 
     // Execute the test

@@ -44,7 +44,7 @@ impl PageWriter {
             + time_encoder_max_size
             + value_encoder_max_size;
         log::trace!("Max size estimated for page writer: {}", max_size);
-        return max_size;
+        max_size
     }
 }
 
@@ -112,7 +112,7 @@ impl ChunkWriter {
 
 impl ChunkWriter {
     pub(crate) fn get_serialized_chunk_size(&self) -> u64 {
-        return if self.page_buffer.len() == 0 {
+        if self.page_buffer.is_empty() {
             0
         } else {
             let measurement_length = self.measurement_id.len() as i32;
@@ -220,7 +220,7 @@ impl ChunkWriter {
                 panic!("Something bad happened!");
             }
             Some(page_writer) => {
-                page_writer.write(timestamp, &value).unwrap().clone()
+                page_writer.write(timestamp, &value).unwrap()
             }
         };
         self.check_page_size_and_may_open_new_page();
@@ -305,7 +305,7 @@ impl ChunkWriter {
 
                     // Write page content
                     self.page_buffer.write_all(&page_writer.buffer);
-                    &page_writer.buffer.clear();
+                    page_writer.buffer.clear();
 
                     self.first_page_statistics = Some(page_writer.statistics.clone())
                 } else if self.num_pages == 1 {
@@ -315,7 +315,7 @@ impl ChunkWriter {
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let header_bytes = &temp[0..self.size_without_statistics];
                     self.page_buffer
-                        .write_all(&header_bytes);
+                        .write_all(header_bytes);
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     match &self.first_page_statistics {
                         Some(stat) => stat.serialize(&mut self.page_buffer),
@@ -324,7 +324,7 @@ impl ChunkWriter {
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     let remainder_bytes = &temp[self.size_without_statistics..];
                     self.page_buffer
-                        .write_all(&remainder_bytes);
+                        .write_all(remainder_bytes);
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
                     // Uncompressed size
                     utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer);
@@ -341,7 +341,7 @@ impl ChunkWriter {
 
                     log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
 
-                    &page_writer.buffer.clear();
+                    page_writer.buffer.clear();
                     self.first_page_statistics = None;
                 } else {
                     // Uncompressed size
@@ -352,7 +352,7 @@ impl ChunkWriter {
                     page_writer.statistics.serialize(&mut self.page_buffer);
                     self.page_buffer.write_all(&page_writer.buffer);
                     log::trace!("Wrote {} bytes to page buffer", &page_writer.buffer.len());
-                    &page_writer.buffer.clear();
+                    page_writer.buffer.clear();
                 }
                 self.num_pages += 1;
                 self.statistics.merge(&page_writer.statistics);
@@ -543,6 +543,6 @@ impl ChunkMetadata {
         if serialize_statistics {
             self.statistics.serialize(file);
         }
-        return result;
+        result
     }
 }

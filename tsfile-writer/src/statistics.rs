@@ -100,19 +100,19 @@ impl StatisticsStruct<i64, f64> {
         // + 16 // startTime, endTime
         // + getStatsSize();
         // 40 -> stat size for int
-        return size_var_u32(self.count) as u32 + 16 + 40;
+        size_var_u32(self.count) as u32 + 16 + 40
     }
 }
 
 impl StatisticsStruct<i32, i64> {
     pub(crate) fn get_serialized_size(&self) -> u32 {
-        return size_var_u32(self.count) as u32 + 16 + 24;
+        size_var_u32(self.count) as u32 + 16 + 24
     }
 }
 
 impl StatisticsStruct<f32, f64> {
     pub(crate) fn get_serialized_size(&self) -> u32 {
-        return size_var_u32(self.count) as u32 + 16 + 24;
+        size_var_u32(self.count) as u32 + 16 + 24
     }
 }
 
@@ -148,8 +148,8 @@ macro_rules! implement_statistics {
                 if statistics.min_value < self.min_value {
                     self.min_value = statistics.min_value;
                 }
-                self.count = self.count + statistics.count;
-                self.sum_value = self.sum_value + statistics.sum_value;
+                self.count += statistics.count;
+                self.sum_value += statistics.sum_value;
             }
 
             pub(crate) fn update(&mut self, timestamp: i64, value: $type) {

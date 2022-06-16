@@ -181,10 +181,10 @@ struct ChunkGroupMetadata {
 
 impl ChunkGroupMetadata {
     fn new(device_id: String, chunk_metadata: Vec<ChunkMetadata>) -> ChunkGroupMetadata {
-        return ChunkGroupMetadata {
+        ChunkGroupMetadata {
             device_id,
             chunk_metadata,
-        };
+        }
     }
 }
 
@@ -326,8 +326,7 @@ impl MetadataIndexNode {
 
         while queue_size != 1 {
             for i in 0..queue_size {
-                metadata_index_node = measurement_metadata_index_queue
-                    .get(measurement_metadata_index_queue.len() - 1)
+                metadata_index_node = measurement_metadata_index_queue.last()
                     .unwrap()
                     .clone();
                 let device = match metadata_index_node.children.get(0) {
@@ -349,7 +348,7 @@ impl MetadataIndexNode {
                     Some(node) => node.name.clone(),
                 };
                 current_index_metadata.children.push(MetadataIndexEntry {
-                    name: name,
+                    name,
                     offset: file.get_position() as usize,
                 });
             }
@@ -475,7 +474,7 @@ impl MetadataIndexNode {
         // return deviceMetadataIndexNode;
     }
     fn is_full(&self, config: &TsFileConfig) -> bool {
-        return self.children.len() >= config.max_degree_of_index_node;
+        self.children.len() >= config.max_degree_of_index_node
     }
 }
 
@@ -591,7 +590,7 @@ impl BloomFilter {
 
         let ln2 = 2.0_f64.ln();
 
-        let size = ((-1 * num_of_string) as f64 * error.ln() / ln2 / ln2) as i32 + 1;
+        let size = (-num_of_string as f64 * error.ln() / ln2 / ln2) as i32 + 1;
         let hash_function_size = ((-1.0 * error.ln() / ln2) + 1.0) as i32;
 
         BloomFilter::new(
@@ -608,7 +607,7 @@ impl BloomFilter {
             (self.bit_set.len() + (self.bit_set.len() % 8)) / 8
         };
 
-        let mut result = vec![0 as u8; number_of_bytes];
+        let mut result = vec![0_u8; number_of_bytes];
 
         for i in 0..self.bit_set.len() {
             let byte_index = (i - (i % 8)) / 8;
@@ -629,7 +628,7 @@ impl BloomFilter {
             std::mem::replace(&mut result[byte_index], value | (bit << bit_index));
         }
 
-        return result;
+        result
     }
 }
 
@@ -669,7 +668,7 @@ impl Serializable for TsFileMetadata {
             }
             None => {
                 // Write 0 as 4 bytes (u32)
-                file.write_all(&(0x00 as u32).to_be_bytes());
+                file.write_all(&0x00_u32.to_be_bytes());
             }
         }
         // Meta Offset
@@ -694,7 +693,7 @@ impl<'a> ChunkGroupHeader<'a> {
 impl Serializable for ChunkGroupHeader<'_> {
     fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         file.write_all(&[0])?;
-        write_str(file, &self.device_id)?;
+        write_str(file, self.device_id)?;
         Ok(())
     }
 }
@@ -767,7 +766,7 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, "d1", "s1", 1000, IoTDBValue::INT(16));
     TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
 
-    ()
+    
 }
 
 #[cfg(test)]
@@ -882,7 +881,7 @@ mod tests {
 
         writer.close();
 
-        ()
+        
     }
 
     #[test]
@@ -914,7 +913,7 @@ mod tests {
 
         writer.close();
 
-        ()
+        
     }
 
     #[test]
@@ -946,7 +945,7 @@ mod tests {
 
         writer.close();
 
-        ()
+        
     }
 
     #[test]
@@ -1011,8 +1010,8 @@ mod tests {
 
         while (number & 0xFFFFFF80) != 0 {
             buffer.push(((number & 0x7F) | 0x80) as u8);
-            number = number >> 7;
-            position = position + 1;
+            number >>= 7;
+            position += 1;
         }
 
         buffer.push((number & 0x7F) as u8);

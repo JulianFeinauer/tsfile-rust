@@ -55,7 +55,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             timeseries_metadata_map: BTreeMap::new(),
         };
         io_writer.start_file()?;
-        return Ok(io_writer);
+        Ok(io_writer)
     }
 
     fn start_file(&mut self) -> Result<(), TsFileError>{
@@ -88,7 +88,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         if self.current_chunk_group_device_id == None || self.chunk_metadata_list.is_empty() {
             return;
         }
-        let device_id = self.current_chunk_group_device_id.clone().unwrap();
+        let device_id = self.current_chunk_group_device_id.unwrap();
         // for chunk_metadata in &self.chunk_metadata_list {
         //     self.chunk_group_metadata_list.get_mut(device_id.as_str()).unwrap().push(
         //         chunk_metadata.clone()
@@ -121,9 +121,9 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
                     path: device_path.clone(),
                 };
                 if !&chunk_metadata_map.contains_key(&path) {
-                    &chunk_metadata_map.insert(path.clone(), vec![]);
+                    chunk_metadata_map.insert(path.clone(), vec![]);
                 }
-                &chunk_metadata_map
+                chunk_metadata_map
                     .get_mut(&path)
                     .unwrap()
                     .push(chunk_metadata.clone());
@@ -148,8 +148,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 
         let paths = chunk_metadata_map
             .keys()
-            .into_iter()
-            .map(|path| path.clone())
+            .into_iter().cloned()
             .collect();
 
         let bloom_filter = BloomFilter::build(paths, &self.config);
@@ -207,16 +206,16 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
                 chunk_meta_data_list_data_size: buffer.len(),
                 measurement_id: metadata.get(0).unwrap().measurement_id.to_owned(),
                 data_type,
-                statistics: statistics,
+                statistics,
                 buffer,
             };
 
             // Add to the global struct
-            let split = path.path.split(".").collect::<Vec<&str>>();
+            let split = path.path.split('.').collect::<Vec<&str>>();
             let mut device_id = "".to_owned();
             for i in 0..split.len() - 1 {
                 if i > 0 {
-                    device_id.push_str(".");
+                    device_id.push('.');
                 }
                 device_id.push_str(*split.get(i).unwrap());
             }
@@ -237,6 +236,6 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         //     println!("Device: {}", device);
         // }
 
-        return MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out, &self.config);
+        MetadataIndexNode::construct_metadata_index(&self.timeseries_metadata_map, &mut self.out, &self.config)
     }
 }

@@ -40,7 +40,7 @@ impl<'a> GroupWriter<'a> {
             series_writer.write_to_file_writer(file_writer);
         }
 
-        return current_chunk_group_size;
+        current_chunk_group_size
     }
 
     pub(crate) fn update_max_group_mem_size(&mut self) -> u32 {
@@ -67,7 +67,7 @@ impl<'a> GroupWriter<'a> {
         for (_, writer) in self.chunk_writers.iter_mut() {
             size += writer.get_serialized_chunk_size();
         }
-        return size;
+        size
     }
 }
 

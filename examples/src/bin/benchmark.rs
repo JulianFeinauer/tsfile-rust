@@ -32,6 +32,6 @@ fn main() {
         println!(" - {:.3}s", *d);
     }
 
-    let count = *&durations.len() as f64;
+    let count = durations.len() as f64;
     println!("Mean: {:.3}", durations.into_iter().reduce(|a, b| a + b).unwrap()/ count);
 }

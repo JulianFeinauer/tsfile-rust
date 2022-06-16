@@ -111,7 +111,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 return Ok(false);
             }
         }
-        return Ok(false);
+        Ok(false)
     }
 
     fn flush_all_chunk_groups(&mut self) -> Result<bool, TsFileError> {
@@ -160,7 +160,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 (
                     path,
                     GroupWriter {
-                        path: path,
+                        path,
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
@@ -213,7 +213,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 (
                     path.borrow(),
                     GroupWriter {
-                        path: path,
+                        path,
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
@@ -238,14 +238,14 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         let io_writer = TsFileIoWriter::new(file_writer, config)?;
         Ok(TsFileWriter {
             filename: String::from(filename),
-            schema: schema,
+            schema,
             group_writers,
             chunk_group_metadata: vec![],
             timeseries_metadata_map: HashMap::new(),
             record_count: 0,
             record_count_for_next_mem_check: 100,
             non_aligned_timeseries_last_time_map: BTreeMap::new(),
-            config: config,
+            config,
             file_io_writer: io_writer,
         })
     }

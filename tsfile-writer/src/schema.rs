@@ -59,7 +59,7 @@ impl<'a> DeviceBuilder<'a> {
     }
 
     pub fn build(&mut self) -> MeasurementGroup<'a> {
-        assert!(self.measurement_groups_map.len() > 0);
+        assert!(!self.measurement_groups_map.is_empty());
         // Copy the content
         let mut measurement_schemas: HashMap<&'a str, MeasurementSchema> = HashMap::new();
         measurement_schemas.clear();

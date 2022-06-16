@@ -89,7 +89,7 @@ impl Encoder for PlainIntEncoder<i32> {
     }
 
     fn size(&mut self) -> u32 {
-        return self.buffer.len() as u32;
+        self.buffer.len() as u32
     }
 }
 
@@ -170,7 +170,7 @@ impl TimeEncoder {
 
 impl TimeEncoder {
     fn get_value_width(v: i64) -> u32 {
-        return 64 - v.leading_zeros();
+        64 - v.leading_zeros()
     }
 
     fn calculate_bit_widths_for_delta_block_buffer(
@@ -185,7 +185,7 @@ impl TimeEncoder {
             width = max(width, value_width)
         }
 
-        return width;
+        width
     }
 
     fn long_to_bytes(number: i64, result: &mut Vec<u8>, pos: usize, width: u32) {
@@ -199,9 +199,9 @@ impl TimeEncoder {
                 true => 8 - cnt,
                 false => my_width,
             };
-            my_width = my_width - m;
+            my_width -= m;
             let old_count = cnt;
-            cnt = cnt + m;
+            cnt += m;
             let y = (number >> my_width) as u8;
             let y = y << (8 - cnt);
 
@@ -209,7 +209,7 @@ impl TimeEncoder {
             // 0...0 (old-cnt-times) 1...1 (8-old-cnt-times)
             let mut new_mask: u8 = 0;
             for i in 0..(8 - old_count) {
-                new_mask = new_mask | (1 << i);
+                new_mask |= 1 << i;
             }
             new_mask = !new_mask;
 
@@ -222,12 +222,12 @@ impl TimeEncoder {
             // Remove the written numbers
             let mut mask: i64 = 0;
             for i in 0..my_width {
-                mask = mask | (1 << i);
+                mask |= 1 << i;
             }
-            my_number = my_number & mask;
+            my_number &= mask;
 
             if cnt == 8 {
-                index = index + 1;
+                index += 1;
                 cnt = 0;
             }
         }

@@ -50,7 +50,7 @@ fn main() {
     let mut durations: Vec<f64> = vec![];
     for _ in 0..10 {
         let start = SystemTime::now();
-        let mut writer = TsFileWriter::new("target/benchmark2.tsfile", schema.clone(), Default::default());
+        let mut writer = TsFileWriter::new("target/benchmark2.tsfile", schema.clone(), Default::default()).unwrap();
         for i in 0..10000001 {
             // writer.write("d1", "s1", i, IoTDBValue::LONG(i));
             // writer.write("d1", "s2", i, IoTDBValue::FLOAT(i as f32));

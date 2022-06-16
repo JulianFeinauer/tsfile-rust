@@ -21,14 +21,14 @@ impl Murmur128 {
     fn get_block(key: &[u8], offset: usize, index: i32) -> i64 {
         let i8: usize = (index << 3) as usize;
         let block_offset: usize = (offset + i8) as usize;
-        return (key[block_offset] as i64 & 0xff)
+        (key[block_offset] as i64 & 0xff)
             + ((key[block_offset + 1] as i64 & 0xff) << 8)
             + ((key[block_offset + 2] as i64 & 0xff) << 16)
             + ((key[block_offset + 3] as i64 & 0xff) << 24)
             + ((key[block_offset + 4] as i64 & 0xff) << 32)
             + ((key[block_offset + 5] as i64 & 0xff) << 40)
             + ((key[block_offset + 6] as i64 & 0xff) << 48)
-            + ((key[block_offset + 7] as i64 & 0xff) << 56);
+            + ((key[block_offset + 7] as i64 & 0xff) << 56)
     }
 
     fn rotl64(v: i64, n: i64) -> i64 {
@@ -42,7 +42,7 @@ impl Murmur128 {
         k ^= ((k as u64) >> 33) as i64;
         k = ((k as i128) * 0xc4ceb9fe1a85ec53) as i64;
         k ^= ((k as u64) >> 33) as i64;
-        return k;
+        k
     }
 
     #[allow(overflowing_literals, arithmetic_overflow)]
@@ -149,6 +149,6 @@ impl Murmur128 {
         h2 = Self::fmix(h2);
         h1 = ((h1 as i128) + (h2 as i128)) as i64;
         h2 = ((h2 as i128) + (h1 as i128)) as i64;
-        return h1.overflowing_add(h2).0;
+        h1.overflowing_add(h2).0
     }
 }

@@ -2,15 +2,15 @@ use crate::{PositionedWrite, TsFileError};
 use std::io::Read;
 
 pub fn write_var_u32<'a>(num: u32, buffer: &mut dyn PositionedWrite) -> Result<u8, TsFileError> {
-    let mut number = num.clone();
+    let mut number = num;
 
     // Now compress them
     let mut position: u8 = 1;
 
     while (number & 0xFFFFFF80) != 0 {
         buffer.write_all(&[((number & 0x7F) | 0x80) as u8])?;
-        number = number >> 7;
-        position = position + 1;
+        number >>= 7;
+        position += 1;
     }
 
     buffer.write_all(&[(number & 0x7F) as u8])?;
@@ -23,17 +23,17 @@ pub fn size_var_i32(num: i32) -> u8 {
     if num < 0 {
         u_value = !u_value;
     }
-    return size_var_u32(u_value as u32);
+    size_var_u32(u_value as u32)
 }
 
 pub fn size_var_u32(num: u32) -> u8 {
     let mut position = 1;
-    let mut value = num.clone();
+    let mut value = num;
     while (value & 0xFFFFFF80) != 0 {
-      value = value >> 7;
+      value >>= 7;
       position += 1;
     }
-    return position;
+    position
 }
 
 pub fn write_var_i32<'a>(num: i32, buffer: &mut dyn PositionedWrite) -> Result<u8, TsFileError> {
@@ -41,14 +41,14 @@ pub fn write_var_i32<'a>(num: i32, buffer: &mut dyn PositionedWrite) -> Result<u
     if num < 0 {
         u_value = !u_value;
     }
-    return write_var_u32(u_value as u32, buffer);
+    write_var_u32(u_value as u32, buffer)
 }
 
 #[allow(dead_code)]
 fn read_byte(buffer: &mut dyn Read) -> u8 {
     let mut read_buffer: [u8; 1] = [0];
     buffer.read(&mut read_buffer).expect("Prblem");
-    return read_buffer[0];
+    read_buffer[0]
 }
 
 #[allow(dead_code)]
@@ -57,10 +57,10 @@ pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     let mut i: u8 = 0;
     let mut b = read_byte(buffer);
     while b != u8::MAX && (b & 0x80) != 0 {
-        value = value | (((b & 0x7F) as u32) << i);
-        i = i + 7;
+        value |= ((b & 0x7F) as u32) << i;
+        i += 7;
         b = read_byte(buffer);
     }
-    return value | ((b as u32) << i);
+    value | ((b as u32) << i)
 }
 
