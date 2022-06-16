@@ -16,6 +16,8 @@ But generally, the TsFiles written with this client are 100% compatible with TsF
 To write a TsFile just do something like
 
 ```
+// Create the Schema
+// Two devices with two sensors each
 let schema = TsFileSchemaBuilder::new()
         .add(
             "d1",
@@ -53,9 +55,10 @@ let schema = TsFileSchemaBuilder::new()
         )
         .build();
         
+// Create the writer
 let mut writer = TsFileWriter::new(
     "target/benchmark2.tsfile",
-    schema.clone(),
+    schema,
     Default::default(),
 )
 .unwrap();
@@ -64,7 +67,8 @@ let mut writer = TsFileWriter::new(
 writer.write_many("d1",1, vec![
         DataPoint::new("s1", IoTDBValue::LONG(i)),
         DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
-    ]);
+]);
+    
 // Write single series
 writer.write("d2", "s1", 1, IoTDBValue::LONG(i));
 writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
