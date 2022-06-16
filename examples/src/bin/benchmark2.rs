@@ -1,10 +1,10 @@
 use std::time::SystemTime;
 use simplelog::{LevelFilter, SimpleLogger};
-use tsfile_writer::{IoTDBValue, Schema, TSDataType};
+use tsfile_writer::{IoTDBValue, TSDataType};
 use tsfile_writer::compression::CompressionType;
 use tsfile_writer::encoding::TSEncoding;
 use tsfile_writer::schema::{DeviceBuilder, TsFileSchemaBuilder};
-use tsfile_writer::test_utils::write_ts_file;
+
 use tsfile_writer::tsfile_writer::{DataPoint, TsFileWriter};
 
 fn main() {
@@ -83,6 +83,6 @@ fn main() {
         println!(" - {:.3}s", *d);
     }
 
-    let count = *&durations.len() as f64;
+    let count = durations.len() as f64;
     println!("Mean: {:.3}", durations.into_iter().reduce(|a, b| a + b).unwrap() / count);
 }

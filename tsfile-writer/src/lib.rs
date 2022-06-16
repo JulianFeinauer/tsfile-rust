@@ -766,7 +766,7 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, "d1", "s1", 1000, IoTDBValue::INT(16));
     TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
 
-    
+
 }
 
 #[cfg(test)]
@@ -881,7 +881,7 @@ mod tests {
 
         writer.close();
 
-        
+
     }
 
     #[test]
@@ -913,7 +913,7 @@ mod tests {
 
         writer.close();
 
-        
+
     }
 
     #[test]
@@ -945,7 +945,7 @@ mod tests {
 
         writer.close();
 
-        
+
     }
 
     #[test]
@@ -1016,7 +1016,8 @@ mod tests {
 
         buffer.push((number & 0x7F) as u8);
 
-        assert_eq!(buffer, [0b10010101, 0b10011010, 0b11101111, 0b00111010])
+        assert_eq!(buffer, [0b10010101, 0b10011010, 0b11101111, 0b00111010]);
+        assert_eq!(position, 4);
     }
 
     #[test]

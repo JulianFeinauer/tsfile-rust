@@ -4,7 +4,6 @@ mod mlog;
 
 use std::fs;
 use std::io::Write;
-use std::str::Utf8Error;
 use std::thread::sleep;
 use std::time::Duration;
 use pnet::datalink;

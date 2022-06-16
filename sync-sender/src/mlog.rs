@@ -128,7 +128,7 @@ mod test {
 
         let mut mlog_buffer: Vec<u8> = vec![];
 
-        m_log.flush(&mut mlog_buffer);
+        m_log.flush(&mut mlog_buffer).unwrap();
 
         assert_eq!(expected, mlog_buffer.deref());
     }
