@@ -1,5 +1,5 @@
-use std::io::{Read};
 use crate::PositionedWrite;
+use std::io::Read;
 
 pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
     let mut number = num.clone();
@@ -15,6 +15,24 @@ pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
 
     buffer.write_all(&[(number & 0x7F) as u8]);
 
+    return position;
+}
+
+pub fn size_var_i32(num: i32) -> u8 {
+    let mut u_value = num << 1;
+    if num < 0 {
+        u_value = !u_value;
+    }
+    return size_var_u32(u_value as u32);
+}
+
+pub fn size_var_u32(num: u32) -> u8 {
+    let mut position = 1;
+    let mut value = num.clone();
+    while (value & 0xFFFFFF80) != 0 {
+      value = value >> 7;
+      position += 1;
+    }
     return position;
 }
 
@@ -43,3 +61,4 @@ pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     }
     return value | ((b as u32) << i);
 }
+

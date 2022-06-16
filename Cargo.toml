@@ -1,14 +1,7 @@
-[package]
-name = "tsfile-rust"
-authors = ["jfeinauer@hey.com"]
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-[dependencies]
-
-[profile.release]
-# See https://kerkour.com/optimize-rust-binary-size
-opt-level = "z"
-lto = true
-codegen-units = 1
-
+members = [
+    "tsfile-writer",
+    "sync-sender",
+    "examples"
+]

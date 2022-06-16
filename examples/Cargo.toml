@@ -1,0 +1,9 @@
+[package]
+name = "tsfile-examples"
+authors = ["jfeinauer@hey.com"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+simplelog = "0.12.0"
+tsfile-writer = {path = "../tsfile-writer"}

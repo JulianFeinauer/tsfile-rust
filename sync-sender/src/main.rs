@@ -86,7 +86,7 @@ fn run() -> thrift::Result<()> {
 
     // let version = std::string::String::from("UNKNOWN");
     let version = std::string::String::from("0.13");
-    let confirmx = ConfirmInfo::new(ip, Some(uuid), Some(PARTITION_INTERVAL), Some(version));
+    let confirm = ConfirmInfo::new(ip, Some(uuid), Some(PARTITION_INTERVAL), Some(version));
 
     let result = client.check(confirm);
 
@@ -166,9 +166,9 @@ fn calculate_digest(writer: &Vec<u8>) -> std::string::String {
     digest
 }
 
-use tsfile_rust::TSDataType;
-use tsfile_rust::encoding::TSEncoding;
-use tsfile_rust::compression::CompressionType;
+use tsfile_writer::TSDataType;
+use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::compression::CompressionType;
 use crate::mlog::MLog;
 
 pub fn write_mlog() -> Vec<u8> {

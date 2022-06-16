@@ -1,8 +1,8 @@
 use std::io::Write;
 
-use tsfile_rust::TSDataType;
-use tsfile_rust::encoding::TSEncoding;
-use tsfile_rust::compression::CompressionType;
+use tsfile_writer::TSDataType;
+use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::compression::CompressionType;
 
 pub struct MLog {
     bytes: Vec<u8>,
@@ -113,9 +113,9 @@ impl MLog {
 #[cfg(test)]
 mod test {
     use std::ops::Deref;
-    use tsfile_rust::compression::CompressionType;
-    use tsfile_rust::encoding::TSEncoding;
-    use tsfile_rust::TSDataType;
+    use tsfile_writer::compression::CompressionType;
+    use tsfile_writer::encoding::TSEncoding;
+    use tsfile_writer::TSDataType;
     use crate::{MLog, write_mlog};
 
     #[test]
