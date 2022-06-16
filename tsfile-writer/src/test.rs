@@ -63,7 +63,6 @@ mod testsabc {
     use std::env::current_dir;
 
     use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
-    use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
     use crate::test_utils::{validate_output, write_ts_file};
 
     // 30 MIO DP pro 45 sek -> 666666 / s -> 666.666 / ms

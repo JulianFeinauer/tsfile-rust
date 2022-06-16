@@ -1,8 +1,7 @@
 use crate::chunk_writer::ChunkWriter;
-use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
-use std::collections::{BTreeMap, HashMap};
-use std::fs::read_to_string;
-use std::io::Write;
+use crate::{IoTDBValue, PositionedWrite};
+use std::collections::{BTreeMap};
+use crate::errors::TsFileError;
 use crate::tsfile_io_writer::TsFileIoWriter;
 use crate::tsfile_writer::DataPoint;
 
@@ -14,10 +13,10 @@ pub struct GroupWriter<'a> {
 }
 
 impl<'a> GroupWriter<'a> {
-    pub(crate) fn write_many(&mut self, timestamp: i64, values: Vec<DataPoint<'a>>) -> Result<u32, &str> {
+    pub(crate) fn write_many(&mut self, timestamp: i64, values: Vec<DataPoint<'a>>) -> Result<u32, TsFileError> {
         let mut records = 0;
         for dp in values {
-            records += self.write(dp.measurement_id, timestamp, dp.value).unwrap();
+            records += self.write(dp.measurement_id, timestamp, dp.value)?;
         }
         Ok(records)
     }
@@ -78,48 +77,29 @@ impl<'a> GroupWriter<'a> {
         measurement_id: &'a str,
         timestamp: i64,
         value: IoTDBValue,
-    ) -> Result<u32, &str> {
+    ) -> Result<u32, TsFileError> {
         // Check is historic
-        self.check_is_history_data(measurement_id, timestamp);
+        self.check_is_history_data(measurement_id, timestamp)?;
 
         let record_count = match &mut self.chunk_writers.get_mut(measurement_id) {
             Some(chunk_writer) => {
                 chunk_writer.write(timestamp, value).unwrap()
             }
-            None => { return  Err("Unknown measurement id");},
+            None => {
+                return Err(TsFileError::IllegalState { source: Some("Unknown measurement id".to_owned()) });
+            }
         };
         self.last_time_map.insert(measurement_id, timestamp);
         Ok(record_count)
     }
 
-    pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), &str> {
-        // // Marker
-        // file.write(&[0]);
-        // // Chunk Group Header
-        // crate::write_str(file, self.path.path.as_str());
-        // End Group Header
-        for (_, chunk_writer) in self.chunk_writers.iter_mut() {
-            chunk_writer.serialize(file);
-        }
-        // TODO Footer?
-        Ok(())
-    }
 
-    pub(crate) fn get_metadata(&self) -> ChunkGroupMetadata {
-        ChunkGroupMetadata::new(
-            self.path.to_owned(),
-            self.chunk_writers
-                .iter()
-                .map(|(_, cw)| cw.get_metadata())
-                .collect(),
-        )
-    }
-    fn check_is_history_data(&mut self, measurement_id: &'a str, timestamp: i64) -> Result<(), &str> {
+    fn check_is_history_data(&mut self, measurement_id: &'a str, timestamp: i64) -> Result<(), TsFileError> {
         if !self.last_time_map.contains_key(measurement_id) {
             self.last_time_map.insert(measurement_id, -1);
         }
         if timestamp <= *self.last_time_map.get(measurement_id).unwrap() {
-            return Err("Error");
+            return Err(TsFileError::OutOfOrderData);
         }
         Ok(())
     }

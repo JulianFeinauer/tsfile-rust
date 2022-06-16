@@ -3,7 +3,6 @@ use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
 use std::marker::PhantomData;
-use crate::utils::{size_var_i32};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
@@ -32,10 +31,6 @@ impl dyn Encoder {
             (TSDataType::INT32, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i32>::new()),
             (TSDataType::FLOAT, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<f32>::new()),
             (TSDataType::INT64, TSEncoding::PLAIN) => Box::new(PlainIntEncoder::<i64>::new()),
-            _ => panic!(
-                "No Encoder implemented for ({:?}, {:?})",
-                data_type, encoding
-            ),
         }
     }
 }
@@ -44,12 +39,6 @@ pub struct PlainIntEncoder<T> {
     // pub(crate) values: Vec<T>,
     pub(crate) buffer: Vec<u8>,
     phantom_data: PhantomData<T>
-}
-
-impl<T> PlainIntEncoder<T> {
-    pub(crate) fn reset(&mut self) {
-        self.buffer.clear()
-    }
 }
 
 impl Encoder for PlainIntEncoder<f32> {
@@ -293,10 +282,6 @@ impl TimeEncoder {
                 write_width,
             );
         }
-
-        let a = (delta_block_buffer.len() * write_width as usize) as f64;
-        let b = a / 8.0;
-        let encoding_length = b.ceil() as usize;
 
         // Copy over to "real" buffer
         self.buffer.write_all(payload_buffer.as_slice());

@@ -1,6 +1,4 @@
-use std::io;
-
-use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType};
+use crate::{write_var_u32, IoTDBValue, PositionedWrite, Serializable, TSDataType, TsFileError};
 use crate::utils::size_var_u32;
 
 #[derive(Clone, Debug)]
@@ -23,7 +21,6 @@ impl Statistics {
             Statistics::INT32(s) => s.get_serialized_size(),
             Statistics::INT64(s) => s.get_serialized_size(),
             Statistics::FLOAT(s) => s.get_serialized_size(),
-            _ => todo!(),
         }
     }
 }
@@ -75,7 +72,7 @@ impl Statistics {
 }
 
 impl Serializable for Statistics {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         match self {
             Statistics::INT32(s) => s.serialize(file),
             Statistics::INT64(s) => s.serialize(file),
@@ -176,17 +173,19 @@ macro_rules! implement_statistics {
         }
 
         impl Serializable for StatisticsStruct<$type, $sum> {
-            fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+            fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
                 // Header for statistics
-                write_var_u32(self.count as u32, file);
-                file.write_all(&self.ts_first.to_be_bytes());
-                file.write_all(&self.ts_last.to_be_bytes());
+                write_var_u32(self.count as u32, file)?;
+                file.write_all(&self.ts_first.to_be_bytes())?;
+                file.write_all(&self.ts_last.to_be_bytes())?;
 
-                file.write_all(&self.min_value.to_be_bytes());
-                file.write_all(&self.max_value.to_be_bytes());
-                file.write_all(&self.first_value.to_be_bytes());
-                file.write_all(&self.last_value.to_be_bytes());
-                file.write_all(&self.sum_value.to_be_bytes())
+                file.write_all(&self.min_value.to_be_bytes())?;
+                file.write_all(&self.max_value.to_be_bytes())?;
+                file.write_all(&self.first_value.to_be_bytes())?;
+                file.write_all(&self.last_value.to_be_bytes())?;
+                file.write_all(&self.sum_value.to_be_bytes())?;
+
+                Ok(())
             }
         }
     };

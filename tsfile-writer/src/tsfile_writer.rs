@@ -2,14 +2,13 @@ use std::borrow::Borrow;
 use crate::chunk_writer::ChunkWriter;
 use crate::group_writer::GroupWriter;
 use crate::{
-    BloomFilter, ChunkGroupMetadata, ChunkMetadata, IoTDBValue, MetadataIndexNode, Path,
-    PositionedWrite, Schema, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable,
-    TsFileMetadata, WriteWrapper,
+    ChunkGroupMetadata, IoTDBValue,
+    PositionedWrite, Schema, TimeSeriesMetadatable,
+    WriteWrapper,
 };
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
 use std::fs::{create_dir_all, File};
-use std::io::Write;
+use crate::errors::TsFileError;
 use crate::ts_file_config::TsFileConfig;
 use crate::tsfile_io_writer::TsFileIoWriter;
 
@@ -30,15 +29,19 @@ impl<'a> DataPoint<'a> {
 }
 
 pub struct TsFileWriter<'a, T: PositionedWrite> {
+    #[allow(dead_code)]
     filename: String,
     pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
     group_writers: BTreeMap<&'a str, GroupWriter<'a>>,
+    #[allow(dead_code)]
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
+    #[allow(dead_code)]
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
     record_count: u32,
     record_count_for_next_mem_check: u32,
     non_aligned_timeseries_last_time_map: BTreeMap<&'a str, BTreeMap<&'a str, i64>>,
     pub schema: Schema<'a>,
+    #[allow(dead_code)]
     config: TsFileConfig
 }
 
@@ -57,14 +60,14 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         measurement_id: &'a str,
         timestamp: i64,
         value: IoTDBValue,
-    ) -> Result<(), &str> {
+    ) -> Result<(), TsFileError> {
         match self.group_writers.get_mut(device) {
             Some(group) => {
-                let records_written = group.write(measurement_id, timestamp, value).unwrap();
+                let records_written = group.write(measurement_id, timestamp, value)?;
                 self.record_count += records_written;
             }
             None => {
-                panic!("Unable to find group writer");
+                return Err(TsFileError::IllegalState { source: Some("No Group Writer found".to_owned())});
             }
         }
         self.check_memory_size_and_may_flush_chunks();
@@ -76,21 +79,21 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         device: &'a str,
         timestamp: i64,
         values: Vec<DataPoint<'a>>,
-    ) -> Result<(), &str> {
+    ) -> Result<(), TsFileError> {
         match self.group_writers.get_mut(device) {
             Some(group) => {
-                let records_written = group.write_many(timestamp, values).unwrap();
+                let records_written = group.write_many(timestamp, values)?;
                 self.record_count += records_written;
             }
             None => {
-                panic!("Unable to find group writer");
+                return Err(TsFileError::IllegalState { source: None })
             }
         }
         self.check_memory_size_and_may_flush_chunks();
         Ok(())
     }
 
-    fn check_memory_size_and_may_flush_chunks(&mut self) -> bool {
+    fn check_memory_size_and_may_flush_chunks(&mut self) -> Result<bool, TsFileError> {
         if self.record_count >= self.record_count_for_next_mem_check {
             let mem_size = self.calculate_mem_size_for_all_groups();
             log::trace!("Memcount calculated: {}", mem_size);
@@ -105,23 +108,23 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 self.record_count_for_next_mem_check = (self.record_count_for_next_mem_check as u64
                     * CHUNK_GROUP_SIZE_THRESHOLD_BYTE as u64/ mem_size as u64) as u32;
                 log::trace!("Next record count for check {}", self.record_count_for_next_mem_check);
-                return false;
+                return Ok(false);
             }
         }
-        return false;
+        return Ok(false);
     }
 
-    fn flush_all_chunk_groups(&mut self) -> bool {
+    fn flush_all_chunk_groups(&mut self) -> Result<bool, TsFileError> {
         if self.record_count > 0 {
             for (device_id, group_writer) in self.group_writers.iter_mut() {
                 // self.file_writer.start_chunk_group(device_id);
                 // self.file_writer
-                self.file_io_writer.start_chunk_group(device_id.clone());
+                self.file_io_writer.start_chunk_group(device_id.clone())?;
                 let pos = self.file_io_writer.out.get_position();
                 let data_size = group_writer.flush_to_filewriter(&mut self.file_io_writer);
 
                 if self.file_io_writer.out.get_position() - pos != data_size {
-                    panic!("Something went wrong!");
+                    return Err(TsFileError::IllegalState { source: Some("Bytes written are not as expected!".to_owned()) });
                 }
 
                 self.file_io_writer.end_chunk_group();
@@ -130,7 +133,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             }
             self.reset();
         }
-        true
+        Ok(true)
     }
 
     fn calculate_mem_size_for_all_groups(&mut self) -> u32 {
@@ -183,11 +186,17 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
-    pub fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> TsFileWriter<'a, WriteWrapper<File>> {
+    pub fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> Result<TsFileWriter<'a, WriteWrapper<File>>, TsFileError> {
         // Create directory, if not exists
-        create_dir_all(std::path::Path::new(filename).parent().unwrap());
+        let folder = match std::path::Path::new(filename).parent() {
+            Some(f) => f,
+            None => {
+                return Err(TsFileError::Error {source: None});
+            }
+        };
+        create_dir_all(folder);
         // Create the file
-        let mut file =
+        let file =
             WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
 
         TsFileWriter::new_from_writer(filename, schema, file, config)
@@ -196,7 +205,7 @@ impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
-    pub(crate) fn new_from_writer(filename: &'a str, schema: Schema<'a>, file_writer: T, config: TsFileConfig) -> TsFileWriter<'a, T> {
+    pub(crate) fn new_from_writer(filename: &'a str, schema: Schema<'a>, file_writer: T, config: TsFileConfig) -> Result<TsFileWriter<'a, T>, TsFileError> {
         let group_writers = schema.clone()
             .measurement_groups
             .into_iter()
@@ -226,7 +235,8 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             })
             .collect();
 
-        TsFileWriter {
+        let io_writer = TsFileIoWriter::new(file_writer, config)?;
+        Ok(TsFileWriter {
             filename: String::from(filename),
             schema: schema,
             group_writers,
@@ -236,7 +246,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             record_count_for_next_mem_check: 100,
             non_aligned_timeseries_last_time_map: BTreeMap::new(),
             config: config,
-            file_io_writer: TsFileIoWriter::new(file_writer, config),
-        }
+            file_io_writer: io_writer,
+        })
     }
 }

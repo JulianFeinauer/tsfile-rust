@@ -3,7 +3,6 @@ extern crate core;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
-use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
 use std::{io, vec};
@@ -13,6 +12,7 @@ use crate::chunk_writer::ChunkMetadata;
 use compression::CompressionType;
 use encoding::TSEncoding;
 use tsfile_writer::TsFileWriter;
+use crate::errors::TsFileError;
 
 use crate::murmur128::Murmur128;
 use crate::statistics::Statistics;
@@ -35,6 +35,7 @@ mod utils;
 mod tsfile_io_writer;
 pub mod test_utils;
 pub mod ts_file_config;
+pub mod errors;
 
 #[allow(dead_code)]
 pub enum IoTDBValue {
@@ -206,7 +207,7 @@ impl Serializable for MetadataIndexNodeType {
     //
     //   /** INTERNAL_MEASUREMENT */
     //   LEAF_MEASUREMENT((byte) 3);
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         let byte: u8 = match self {
             MetadataIndexNodeType::LeafMeasurement => 0x03,
             MetadataIndexNodeType::InternalMeasurement => 0x02,
@@ -227,7 +228,7 @@ struct MetadataIndexEntry {
 }
 
 impl Serializable for MetadataIndexEntry {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         // int byteLen = 0;
         // byteLen += ReadWriteIOUtils.writeVar(name, outputStream);
         // byteLen += ReadWriteIOUtils.write(offset, outputStream);
@@ -248,7 +249,7 @@ struct MetadataIndexNode {
 }
 
 impl Serializable for MetadataIndexNode {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         // int byteLen = 0;
         // byteLen += ReadWriteForEncodingUtils.writeUnsignedVarInt(children.size(), outputStream);
         // for (MetadataIndexEntry metadataIndexEntry : children) {
@@ -633,7 +634,7 @@ impl BloomFilter {
 }
 
 impl Serializable for BloomFilter {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         // Real
         let bytes = self.serialize_bits();
 
@@ -661,7 +662,7 @@ impl TsFileMetadata {
 }
 
 impl Serializable for TsFileMetadata {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         match self.metadata_index.clone() {
             Some(index) => {
                 index.serialize(file);
@@ -691,9 +692,9 @@ impl<'a> ChunkGroupHeader<'a> {
 }
 
 impl Serializable for ChunkGroupHeader<'_> {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         file.write_all(&[0])?;
-        write_str(file, &self.device_id);
+        write_str(file, &self.device_id)?;
         Ok(())
     }
 }
@@ -703,20 +704,20 @@ struct ChunkGroup<'a> {
 }
 
 impl Serializable for ChunkGroup<'_> {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError> {
         self.header.serialize(file)
     }
 }
 
 pub trait Serializable {
-    fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()>;
+    fn serialize(&self, file: &mut dyn PositionedWrite) -> Result<(), TsFileError>;
 }
 
-fn write_str(file: &mut dyn PositionedWrite, s: &str) -> io::Result<()> {
+fn write_str<'a>(file: &mut dyn PositionedWrite, s: &str) -> Result<(), TsFileError> {
     let len = s.len() as i32;
-    write_var_i32(len, file);
+    write_var_i32(len, file)?;
     let bytes = s.as_bytes();
-    file.write(bytes); // measurement id
+    file.write(bytes)?; // measurement id
     Ok(())
 }
 
@@ -758,7 +759,7 @@ pub fn write_file_3() {
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
-    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default());
+    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default()).unwrap();
 
     TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
     TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
@@ -767,40 +768,6 @@ pub fn write_file_3() {
     TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
 
     ()
-}
-
-#[warn(dead_code)]
-fn write_file() {
-    std::fs::remove_file("target/data.tsfile");
-
-    let zero: [u8; 1] = [0];
-    let mut file = File::create("target/data.tsfile").expect("create failed");
-    let version: [u8; 1] = [3];
-
-    // Header
-    file.write("TsFile".as_bytes()).expect("write failed");
-    file.write(&version).expect("write failed");
-    // End of Header
-    file.write(&zero).expect("write failed");
-    // First Channel Group
-    // Chunk Group Header
-    file.write(&[4]).expect("write failed"); // lenght (?)
-    file.write("d1".as_bytes()).expect("write failed"); // device id
-                                                        // First Chunk
-                                                        // Chunk Header
-    file.write(&[5]).expect("write failed"); // Marker
-    file.write(&[4]).expect("write failed"); // lenght (?)
-    file.write("s1".as_bytes()).expect("write failed"); // measurement id
-                                                        // Data Lenght
-    file.write(&[28]).expect("write failed");
-    // Data Type INT32 -> 1
-    file.write(&[1]).expect("write failed");
-    // Compression Type UNCOMPRESSED -> 0
-    file.write(&[0]).expect("write failed");
-    // Encoding PLAIN -> 0
-    file.write(&[0]).expect("write failed");
-
-    println!("data written to file");
 }
 
 #[cfg(test)]
@@ -813,20 +780,12 @@ mod tests {
     use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
     use crate::tsfile_writer::TsFileWriter;
     use crate::utils::{read_var_u32, write_var_u32};
-    use crate::{
-        IoTDBValue, MeasurementGroup, MeasurementSchema, Path, Schema,
-        TSDataType, write_file, write_file_3, WriteWrapper,
-    };
+    use crate::{IoTDBValue, MeasurementGroup, MeasurementSchema, Schema, TSDataType, TsFileError, write_file_3, WriteWrapper};
 
     #[test]
     fn it_works() {
         let result = 2 + 2;
         assert_eq!(result, 4);
-    }
-
-    #[test]
-    fn write_file_test() {
-        write_file()
     }
 
     #[test]
@@ -867,9 +826,9 @@ mod tests {
             measurement_groups: measurement_groups_map,
         };
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data3.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data3.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
         TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
@@ -914,7 +873,7 @@ mod tests {
 
         let filename = format!("target/{}-1-0-0.tsfile", epoch_time_ms);
         let mut writer =
-            TsFileWriter::new(filename.as_str(), schema, Default::default());
+            TsFileWriter::new(filename.as_str(), schema, Default::default()).unwrap();
 
         for i in 0..100 {
             writer.write(device, "s1", i, IoTDBValue::INT(i as i32));
@@ -942,7 +901,7 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("target/write_long.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/write_long.tsfile", schema, Default::default()).unwrap();
 
         let result = writer.write("d1", "s1", 0, IoTDBValue::LONG(0));
 
@@ -974,7 +933,7 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("target/write_float.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/write_float.tsfile", schema, Default::default()).unwrap();
 
         let result = writer.write("d1", "s1", 0, IoTDBValue::FLOAT(3.141));
 
@@ -1010,7 +969,7 @@ mod tests {
     fn write_var_int() {
         let number: u32 = 123456789;
         let mut result: Vec<u8> = vec![];
-        let position = write_var_u32(number, &mut result);
+        let position = write_var_u32(number, &mut result).unwrap();
 
         assert_eq!(position, 4);
         assert_eq!(
@@ -1023,7 +982,7 @@ mod tests {
     fn write_var_int_2() {
         let number: u32 = 128;
         let mut result: Vec<u8> = vec![];
-        let position = write_var_u32(number, &mut result);
+        let position = write_var_u32(number, &mut result).unwrap();
 
         assert_eq!(position, 2);
         assert_eq!(result.as_slice(), [128, 1]);
@@ -1033,7 +992,7 @@ mod tests {
     fn write_var_int_3() {
         let number: u32 = 13;
         let mut result: Vec<u8> = vec![];
-        let position = write_var_u32(number, &mut result);
+        let position = write_var_u32(number, &mut result).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(result.as_slice(), [13]);
@@ -1123,9 +1082,9 @@ mod tests {
             .build();
 
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s1", 1, IoTDBValue::INT(13));
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
@@ -1171,9 +1130,9 @@ mod tests {
             .build();
 
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::INT(13));
 
@@ -1219,9 +1178,9 @@ mod tests {
             .build();
 
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::LONG(13));
 
@@ -1266,9 +1225,9 @@ mod tests {
             .build();
 
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::FLOAT(13.0));
 
@@ -1463,9 +1422,9 @@ mod tests {
             .build();
 
         let buffer: Vec<u8> = vec![];
-        let mut buffer_writer = WriteWrapper::new(buffer);
+        let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default()).unwrap();
 
         for i in 0..1001 {
             writer.write("d1", "s", i, IoTDBValue::INT(i as i32));
@@ -1493,13 +1452,27 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("target/10000_int64.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/10000_int64.tsfile", schema, Default::default()).unwrap();
 
         for i in 0..10001 {
             writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
         }
 
         writer.close();
+    }
+
+    #[test]
+    fn write_out_of_order_data() -> Result<(), TsFileError> {
+        let schema = Schema::simple("d1", "s1", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
+
+        let mut writer = TsFileWriter::new("target/test.tsfile", schema, Default::default())?;
+
+        writer.write("d1", "s1", 1, IoTDBValue::LONG(1))?;
+        let result = writer.write("d1", "s1", 1, IoTDBValue::LONG(1));
+
+        assert_eq!(Some(TsFileError::OutOfOrderData), result.err());
+
+        Ok(())
     }
 }
 

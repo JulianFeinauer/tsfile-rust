@@ -1,7 +1,7 @@
-use std::borrow::Borrow;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use crate::{BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType, MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TimeSeriesMetadata, TimeSeriesMetadatable, TSDataType, TSEncoding, TsFileConfig, TsFileMetadata};
 use crate::chunk_writer::ChunkHeader;
+use crate::errors::TsFileError;
 
 pub struct TsFileIoWriter<'a, T: PositionedWrite> {
     config: TsFileConfig,
@@ -44,7 +44,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
 }
 
 impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
-    pub(crate) fn new(writer: T, config: TsFileConfig) -> TsFileIoWriter<'a, T> {
+    pub(crate) fn new(writer: T, config: TsFileConfig) -> Result<TsFileIoWriter<'a, T>, TsFileError> {
         let mut io_writer = TsFileIoWriter {
             config,
             out: writer,
@@ -54,22 +54,24 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
             chunk_group_metadata_list: vec![],
             timeseries_metadata_map: BTreeMap::new(),
         };
-        io_writer.start_file();
-        return io_writer;
+        io_writer.start_file()?;
+        return Ok(io_writer);
     }
 
-    fn start_file(&mut self) {
-        self.out.write("TsFile".as_bytes()).expect("write failed");
-        self.out.write(&[0x03]).expect("write failed");
+    fn start_file(&mut self) -> Result<(), TsFileError>{
+        self.out.write("TsFile".as_bytes())?;
+        self.out.write(&[0x03])?;
+        Ok(())
     }
 
-    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) {
+    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) -> Result<(), TsFileError>{
         log::info!("Start chunk group:{}, file position {}", &device_id, self.out.get_position());
         let chunk_group_header = ChunkGroupHeader::new(device_id);
-        chunk_group_header.serialize(&mut self.out);
+        chunk_group_header.serialize(&mut self.out)?;
 
         self.current_chunk_group_device_id = Some(device_id);
         self.chunk_metadata_list.clear();
+        Ok(())
     }
 
     // public void endChunkGroup() throws IOException {

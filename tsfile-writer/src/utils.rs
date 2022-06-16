@@ -1,21 +1,21 @@
-use crate::PositionedWrite;
+use crate::{PositionedWrite, TsFileError};
 use std::io::Read;
 
-pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> u8 {
+pub fn write_var_u32<'a>(num: u32, buffer: &mut dyn PositionedWrite) -> Result<u8, TsFileError> {
     let mut number = num.clone();
 
     // Now compress them
     let mut position: u8 = 1;
 
     while (number & 0xFFFFFF80) != 0 {
-        buffer.write_all(&[((number & 0x7F) | 0x80) as u8]);
+        buffer.write_all(&[((number & 0x7F) | 0x80) as u8])?;
         number = number >> 7;
         position = position + 1;
     }
 
-    buffer.write_all(&[(number & 0x7F) as u8]);
+    buffer.write_all(&[(number & 0x7F) as u8])?;
 
-    return position;
+    Ok(position)
 }
 
 pub fn size_var_i32(num: i32) -> u8 {
@@ -36,7 +36,7 @@ pub fn size_var_u32(num: u32) -> u8 {
     return position;
 }
 
-pub fn write_var_i32(num: i32, buffer: &mut dyn PositionedWrite) -> u8 {
+pub fn write_var_i32<'a>(num: i32, buffer: &mut dyn PositionedWrite) -> Result<u8, TsFileError> {
     let mut u_value = num << 1;
     if num < 0 {
         u_value = !u_value;
@@ -44,12 +44,14 @@ pub fn write_var_i32(num: i32, buffer: &mut dyn PositionedWrite) -> u8 {
     return write_var_u32(u_value as u32, buffer);
 }
 
+#[allow(dead_code)]
 fn read_byte(buffer: &mut dyn Read) -> u8 {
     let mut read_buffer: [u8; 1] = [0];
     buffer.read(&mut read_buffer).expect("Prblem");
     return read_buffer[0];
 }
 
+#[allow(dead_code)]
 pub fn read_var_u32(buffer: &mut dyn Read) -> u32 {
     let mut value: u32 = 0;
     let mut i: u8 = 0;

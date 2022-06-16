@@ -1,7 +1,7 @@
 use crate::encoding::Encoder;
 use crate::encoding::TimeEncoder;
 use crate::statistics::Statistics;
-use crate::{CHUNK_HEADER, CompressionType, IoTDBValue, ONLY_ONE_PAGE_CHUNK_HEADER, PositionedWrite, Serializable, TSDataType, TSEncoding, utils, write_str};
+use crate::{CHUNK_HEADER, CompressionType, IoTDBValue, ONLY_ONE_PAGE_CHUNK_HEADER, PositionedWrite, Serializable, TSDataType, TSEncoding, TsFileError, utils, write_str};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
@@ -84,7 +84,9 @@ pub struct ChunkWriter {
     pub(crate) data_type: TSDataType,
     pub compression_type: CompressionType,
     pub encoding: TSEncoding,
+    #[allow(dead_code)]
     pub(crate) mask: u8,
+    #[allow(dead_code)]
     offset_of_chunk_header: Option<u64>,
     pub(crate) statistics: Statistics,
     current_page_writer: Option<PageWriter>,
@@ -279,7 +281,7 @@ impl ChunkWriter {
     //     }
     //   }
     // }
-    fn write_page_to_buffer(&mut self) {
+    fn write_page_to_buffer(&mut self) -> Result<(), TsFileError> {
         match self.current_page_writer.as_mut() {
             Some(page_writer) => {
                 page_writer.prepare_buffer();
@@ -294,11 +296,11 @@ impl ChunkWriter {
                 if self.num_pages == 0 {
                     // Uncompressed size
                     self.size_without_statistics +=
-                        utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer)
+                        utils::write_var_u32(uncompressed_bytes as u32, &mut self.page_buffer)?
                             as usize;
                     // Compressed size
                     self.size_without_statistics +=
-                        utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)
+                        utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)?
                             as usize;
 
                     // Write page content
@@ -358,6 +360,8 @@ impl ChunkWriter {
             }
             _ => {}
         };
+
+        Ok(())
     }
 }
 
@@ -441,6 +445,8 @@ impl ChunkWriter {
         }
     }
 
+    // This method is used?!
+    #[allow(dead_code)]
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) {
         // Before we can write the header we have to serialize the current page
         self.write_page_to_buffer();
@@ -481,6 +487,8 @@ impl ChunkWriter {
         log::trace!("Offset after {}", file.get_position());
     }
 
+    // This method is used?!
+    #[allow(dead_code)]
     pub(crate) fn get_metadata(&self) -> ChunkMetadata {
         ChunkMetadata {
             measurement_id: self.measurement_id.clone(),
