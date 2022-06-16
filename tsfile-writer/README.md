@@ -93,3 +93,11 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 
 * [x] Uncompressed
 * [ ] everything else...
+
+## Changelog
+
+### 0.1.1
+
+- Lots of Refactoring
+- Added `Result<_, TsFileError>` to basically every operation
+- Improved Readme
