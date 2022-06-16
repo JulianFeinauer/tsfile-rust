@@ -528,11 +528,11 @@ impl HashFunction {
         HashFunction { cap, seed }
     }
 
-    fn _murmur_hash(&self, s: &String, seed: i32) -> i32 {
+    fn _murmur_hash(&self, s: &str, seed: i32) -> i32 {
         Murmur128::hash(s, seed)
     }
 
-    fn hash(&self, value: &String) -> usize {
+    fn hash(&self, value: &str) -> usize {
         // return Math.abs(Murmur128Hash.hash(value, seed)) % cap;
         (self._murmur_hash(value, self.seed).abs() % self.cap) as usize
     }

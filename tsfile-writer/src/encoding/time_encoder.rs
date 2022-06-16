@@ -36,7 +36,7 @@ impl TimeEncoder {
 
     fn calculate_bit_widths_for_delta_block_buffer(
         &mut self,
-        delta_block_buffer: &Vec<i64>,
+        delta_block_buffer: &[i64],
     ) -> u32 {
         let mut width = 0;
 

@@ -8,7 +8,7 @@ impl Murmur128 {
      * @param seed seed
      * @return hashcode of value
      */
-    pub fn hash(value: &String, seed: i32) -> i32 {
+    pub fn hash(value: &str, seed: i32) -> i32 {
         return Self::inner_hash(
             value.as_bytes(),
             0,
