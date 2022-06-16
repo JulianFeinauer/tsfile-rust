@@ -1,9 +1,9 @@
+use crate::encoding::Encoder;
 use crate::TSDataType;
-use crate::{IoTDBValue, PositionedWrite, utils};
+use crate::{utils, IoTDBValue, PositionedWrite};
 use std::cmp::max;
 use std::io::Write;
 use std::marker::PhantomData;
-use crate::encoding::Encoder;
 
 pub struct PlainEncoder<T> {
     // pub(crate) values: Vec<T>,

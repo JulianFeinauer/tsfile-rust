@@ -1,5 +1,5 @@
-use crate::{IoTDBValue, TSDataType};
 use crate::encoding::plain::PlainEncoder;
+use crate::{IoTDBValue, TSDataType};
 
 pub mod plain;
 pub mod time_encoder;
@@ -30,9 +30,7 @@ pub trait Encoder {
 impl dyn Encoder {
     pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder> {
         match encoding {
-            TSEncoding::PLAIN => {
-                plain::new(data_type)
-            }
+            TSEncoding::PLAIN => plain::new(data_type),
         }
     }
 }

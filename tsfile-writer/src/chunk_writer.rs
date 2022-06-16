@@ -27,7 +27,6 @@ struct PageWriter {
 }
 
 impl PageWriter {
-
     fn new(data_type: TSDataType, encoding: TSEncoding) -> PageWriter {
         PageWriter {
             time_encoder: TimeEncoder::new(),
