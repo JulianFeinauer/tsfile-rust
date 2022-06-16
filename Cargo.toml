@@ -1,3 +1,6 @@
 [workspace]
 
-members = ["tsfile-writer"]
+members = [
+    "tsfile-writer",
+    "sync-sender"
+]
