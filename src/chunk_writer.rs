@@ -250,7 +250,6 @@ impl ChunkWriter {
                 //     (int) (((float) pageSizeThreshold / currentPageSize) * pageWriter.getPointNumber());
                 self.value_count_in_one_page_for_next_check =
                     ((PAGE_SIZE_THRESHOLD as f32) / (current_page_size as f32) * (page_writer.point_number as f32)) as u32;
-                println!("Value count for next page check {}", self.value_count_in_one_page_for_next_check);
             }
         }
     }

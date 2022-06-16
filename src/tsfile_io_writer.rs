@@ -131,10 +131,6 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         // Get meta offset
         let meta_offset = self.out.get_position();
 
-        for (p, v) in chunk_metadata_map.iter() {
-            println!("Path: {}", p);
-        }
-
         // Write Marker 0x02
         self.out.write_all(&[0x02]);
 

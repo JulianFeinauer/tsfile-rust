@@ -14,6 +14,20 @@ use crate::tsfile_io_writer::TsFileIoWriter;
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
+pub struct DataPoint<'a> {
+    pub(crate) measurement_id: &'a str,
+    pub(crate) value: IoTDBValue
+}
+
+impl<'a> DataPoint<'a> {
+    pub fn new(measurement_id: &'a str, value: IoTDBValue) -> DataPoint<'a> {
+        Self {
+            measurement_id,
+            value
+        }
+    }
+}
+
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     filename: String,
     pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
@@ -22,13 +36,13 @@ pub struct TsFileWriter<'a, T: PositionedWrite> {
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
     record_count: u32,
     record_count_for_next_mem_check: u32,
-    non_aligned_timeseries_last_time_map: HashMap<&'a str, HashMap<&'a str, i64>>,
+    non_aligned_timeseries_last_time_map: BTreeMap<&'a str, BTreeMap<&'a str, i64>>,
     pub schema: Schema<'a>,
     config: TsFileConfig
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
-    pub(crate) fn close(&mut self) {
+    pub fn close(&mut self) {
         log::info!("start close file");
         self.flush_all_chunk_groups();
         self.file_io_writer.end_file();
@@ -52,14 +66,31 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 panic!("Unable to find group writer");
             }
         }
-        println!("Records: {}", self.record_count);
+        self.check_memory_size_and_may_flush_chunks();
+        Ok(())
+    }
+
+    pub fn write_many(
+        &mut self,
+        device: &'a str,
+        timestamp: i64,
+        values: Vec<DataPoint<'a>>,
+    ) -> Result<(), &str> {
+        match self.group_writers.get_mut(device) {
+            Some(group) => {
+                let records_written = group.write_many(timestamp, values).unwrap();
+                self.record_count += records_written;
+            }
+            None => {
+                panic!("Unable to find group writer");
+            }
+        }
         self.check_memory_size_and_may_flush_chunks();
         Ok(())
     }
 
     fn check_memory_size_and_may_flush_chunks(&mut self) -> bool {
         if self.record_count >= self.record_count_for_next_mem_check {
-            println!("Checking memory size on record no: {}", self.record_count);
             let mem_size = self.calculate_mem_size_for_all_groups();
             log::trace!("Memcount calculated: {}", mem_size);
             log::trace!("{:.2?}% - {} / {} for flushing", mem_size as f64/CHUNK_GROUP_SIZE_THRESHOLD_BYTE as f64 * 100.0, mem_size, CHUNK_GROUP_SIZE_THRESHOLD_BYTE);
@@ -141,7 +172,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                                 )
                             })
                             .collect(),
-                        last_time_map: HashMap::new()
+                        last_time_map: BTreeMap::new()
                     },
                 )
             })
@@ -151,7 +182,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
-    pub(crate) fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> TsFileWriter<'a, WriteWrapper<File>> {
+    pub fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> TsFileWriter<'a, WriteWrapper<File>> {
         let mut file =
             WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
 
@@ -185,7 +216,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                                 )
                             })
                             .collect(),
-                        last_time_map: HashMap::new()
+                        last_time_map: BTreeMap::new()
                     },
                 )
             })
@@ -199,7 +230,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             timeseries_metadata_map: HashMap::new(),
             record_count: 0,
             record_count_for_next_mem_check: 100,
-            non_aligned_timeseries_last_time_map: HashMap::new(),
+            non_aligned_timeseries_last_time_map: BTreeMap::new(),
             config: config,
             file_io_writer: TsFileIoWriter::new(file_writer, config),
         }

@@ -1,18 +1,30 @@
 use crate::chunk_writer::ChunkWriter;
 use crate::{ChunkGroupMetadata, IoTDBValue, Path, PositionedWrite};
 use std::collections::{BTreeMap, HashMap};
+use std::fs::read_to_string;
 use std::io::Write;
 use crate::tsfile_io_writer::TsFileIoWriter;
+use crate::tsfile_writer::DataPoint;
 
 
 pub struct GroupWriter<'a> {
     pub(crate) path: &'a str,
     pub(crate) chunk_writers: BTreeMap<&'a str, ChunkWriter>,
-    pub(crate) last_time_map: HashMap<&'a str, i64>
+    pub(crate) last_time_map: BTreeMap<&'a str, i64>
 }
 
 impl<'a> GroupWriter<'a> {
-    pub(crate) fn get_last_time_map(&mut self) -> HashMap<&'a str, i64> {
+    pub(crate) fn write_many(&mut self, timestamp: i64, values: Vec<DataPoint<'a>>) -> Result<u32, &str> {
+        let mut records = 0;
+        for dp in values {
+            records += self.write(dp.measurement_id, timestamp, dp.value).unwrap();
+        }
+        Ok(records)
+    }
+}
+
+impl<'a> GroupWriter<'a> {
+    pub(crate) fn get_last_time_map(&mut self) -> BTreeMap<&'a str, i64> {
         self.last_time_map.clone()
     }
 }
@@ -67,12 +79,17 @@ impl<'a> GroupWriter<'a> {
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<u32, &str> {
-        match &mut self.chunk_writers.get_mut(measurement_id) {
+        // Check is historic
+        self.check_is_history_data(measurement_id, timestamp);
+
+        let record_count = match &mut self.chunk_writers.get_mut(measurement_id) {
             Some(chunk_writer) => {
-                Ok(chunk_writer.write(timestamp, value).unwrap())
+                chunk_writer.write(timestamp, value).unwrap()
             }
-            None => Err("Unknown measurement id"),
-        }
+            None => { return  Err("Unknown measurement id");},
+        };
+        self.last_time_map.insert(measurement_id, timestamp);
+        Ok(record_count)
     }
 
     pub(crate) fn serialize(&mut self, file: &mut dyn PositionedWrite) -> Result<(), &str> {
@@ -96,5 +113,14 @@ impl<'a> GroupWriter<'a> {
                 .map(|(_, cw)| cw.get_metadata())
                 .collect(),
         )
+    }
+    fn check_is_history_data(&mut self, measurement_id: &'a str, timestamp: i64) -> Result<(), &str> {
+        if !self.last_time_map.contains_key(measurement_id) {
+            self.last_time_map.insert(measurement_id, -1);
+        }
+        if timestamp <= *self.last_time_map.get(measurement_id).unwrap() {
+            return Err("Error");
+        }
+        Ok(())
     }
 }

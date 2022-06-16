@@ -30,7 +30,7 @@ mod murmur128;
 pub mod schema;
 mod statistics;
 mod test;
-mod tsfile_writer;
+pub mod tsfile_writer;
 mod utils;
 mod benchmark;
 mod tsfile_io_writer;
