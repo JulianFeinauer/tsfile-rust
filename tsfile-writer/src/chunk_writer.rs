@@ -372,8 +372,7 @@ impl ChunkWriter {
                         as usize;
                 // Compressed size
                 self.size_without_statistics +=
-                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)?
-                        as usize;
+                    utils::write_var_u32(compressed_bytes as u32, &mut self.page_buffer)? as usize;
 
                 // Write page content
                 self.page_buffer.write_all(&page_writer.buffer);
@@ -406,9 +405,9 @@ impl ChunkWriter {
                 page_writer.statistics.serialize(&mut self.page_buffer);
 
                 log::trace!(
-                        "Flushing page at page buffer offset {}",
-                        self.page_buffer.get_position()
-                    );
+                    "Flushing page at page buffer offset {}",
+                    self.page_buffer.get_position()
+                );
 
                 self.page_buffer.write_all(&page_writer.buffer);
 
@@ -447,7 +446,10 @@ pub struct ChunkHeader {
 }
 
 impl ChunkHeader {
-    pub(crate) fn serialize<T: PositionedWrite>(&self, file_writer: &mut T) -> Result<(), TsFileError> {
+    pub(crate) fn serialize<T: PositionedWrite>(
+        &self,
+        file_writer: &mut T,
+    ) -> Result<(), TsFileError> {
         // Marker
         // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
         let marker = if self.num_pages <= 1 {
@@ -462,14 +464,11 @@ impl ChunkHeader {
         // Data Length
         utils::write_var_u32(self.data_size, file_writer)?;
         // Data Type INT32 -> 1
-        file_writer
-            .write_all(&[self.data_type.serialize()])?;
+        file_writer.write_all(&[self.data_type.serialize()])?;
         // Compression Type UNCOMPRESSED -> 0
-        file_writer
-            .write_all(&[self.compression.serialize()])?;
+        file_writer.write_all(&[self.compression.serialize()])?;
         // Encoding PLAIN -> 0
-        file_writer
-            .write_all(&[self.encoding.serialize()])?;
+        file_writer.write_all(&[self.encoding.serialize()])?;
         // End Chunk Header
         Ok(())
     }
