@@ -13,9 +13,9 @@ But generally, the TsFiles written with this client are 100% compatible with TsF
 
 ## Encodings
 
-- [x] Timeseries Encoding
-- [x] Plain
-- [ ] everything else...
+* [x] Timeseries Encoding
+* [x] Plain
+* [ ] everything else...
 
 ## Datatypes
 
