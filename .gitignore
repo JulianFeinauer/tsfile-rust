@@ -1,4 +1,4 @@
-/target
+**/target
 Cargo.lock
 .idea
 /tsfile-writer/TsFile_sketch_view.txt
