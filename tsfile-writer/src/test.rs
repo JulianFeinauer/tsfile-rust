@@ -59,14 +59,15 @@
 // }
 
 #[cfg(test)]
-mod testsabc {
+mod test {
     use std::env::current_dir;
 
     use crate::test_utils::{validate_output, write_ts_file};
     use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
 
-    // 30 MIO DP pro 45 sek -> 666666 / s -> 666.666 / ms
+    // Can not run currently, as it needs the ts file analyzer tool
     #[test]
+    #[ignore]
     fn flush_chunk() {
         let schema = Schema::simple(
             "d1",
