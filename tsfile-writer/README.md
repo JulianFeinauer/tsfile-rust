@@ -15,16 +15,16 @@ But generally, the TsFiles written with this client are 100% compatible with TsF
 
 - [x] Timeseries Encoding
 - [x] Plain
-- [] everything else...
+- [ ] everything else...
 
 ## Datatypes
 
 - [x] INT32
 - [x] INT64
 - [x] FLOAT
-- [] everything else...
+- [ ] everything else...
 
 ## Compression
 
 - [x] Uncompressed
-- [] everything else...
+- [ ] everything else...
