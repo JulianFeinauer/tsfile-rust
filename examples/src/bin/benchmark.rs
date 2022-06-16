@@ -1,16 +1,19 @@
 use std::time::SystemTime;
+use simplelog::{LevelFilter, SimpleLogger};
 use tsfile_writer::{IoTDBValue, Schema, TSDataType};
 use tsfile_writer::compression::CompressionType;
 use tsfile_writer::encoding::TSEncoding;
 use tsfile_writer::test_utils::write_ts_file;
 
 fn main() {
+    let _ = SimpleLogger::init(LevelFilter::Info, Default::default());
+
     let schema = Schema::simple("d1", "s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
 
     let mut durations: Vec<f64> = vec![];
     for _ in 0..10 {
         let start = SystemTime::now();
-        write_ts_file("benchmark.tsfile", schema.clone(), |writer| {
+        write_ts_file("target/benchmark.tsfile", schema.clone(), |writer| {
             for i in 0..100000001 {
                 writer.write("d1", "s", i, IoTDBValue::LONG(i));
             }

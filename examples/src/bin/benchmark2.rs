@@ -1,12 +1,15 @@
 use std::time::SystemTime;
-use tsfile_rust::{IoTDBValue, Schema, TSDataType};
-use tsfile_rust::compression::CompressionType;
-use tsfile_rust::encoding::TSEncoding;
-use tsfile_rust::schema::{DeviceBuilder, TsFileSchemaBuilder};
-use tsfile_rust::test_utils::write_ts_file;
-use tsfile_rust::tsfile_writer::{DataPoint, TsFileWriter};
+use simplelog::{LevelFilter, SimpleLogger};
+use tsfile_writer::{IoTDBValue, Schema, TSDataType};
+use tsfile_writer::compression::CompressionType;
+use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::schema::{DeviceBuilder, TsFileSchemaBuilder};
+use tsfile_writer::test_utils::write_ts_file;
+use tsfile_writer::tsfile_writer::{DataPoint, TsFileWriter};
 
 fn main() {
+    let _ = SimpleLogger::init(LevelFilter::Info, Default::default());
+
     let schema = TsFileSchemaBuilder::new()
         .add(
             "d1",
@@ -47,7 +50,7 @@ fn main() {
     let mut durations: Vec<f64> = vec![];
     for _ in 0..10 {
         let start = SystemTime::now();
-        let mut writer = TsFileWriter::new("benchmark2.tsfile", schema.clone(), Default::default());
+        let mut writer = TsFileWriter::new("target/benchmark2.tsfile", schema.clone(), Default::default());
         for i in 0..10000001 {
             // writer.write("d1", "s1", i, IoTDBValue::LONG(i));
             // writer.write("d1", "s2", i, IoTDBValue::FLOAT(i as f32));

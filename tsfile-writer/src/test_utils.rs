@@ -12,7 +12,7 @@ pub fn validate_output(filename: &str, expected_structure: &str) {
         .expect("Failed to execute command");
 
     let structure = String::from_utf8(output.stdout).unwrap();
-    let real = structure.lines().filter(|line| !line.contains("[main]") && !line.contains("file path")).map(|line| line.trim_end()).collect::<Vec<&str>>().join("\n");
+    let real = structure.lines().filter(|line| !line.contains("[main]") && !line.contains("TsFile path") && !line.contains("file path")).map(|line| line.trim_end()).collect::<Vec<&str>>().join("\n");
     assert_eq!(expected_structure, real)
 }
 

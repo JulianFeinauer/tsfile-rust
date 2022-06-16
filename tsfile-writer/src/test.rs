@@ -71,7 +71,7 @@ mod testsabc {
     fn flush_chunk() {
         let schema = Schema::simple("d1", "s", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
 
-        write_ts_file("benchmark.tsfile", schema, |writer| {
+        write_ts_file("target/benchmark.tsfile", schema, |writer| {
             for i in 0..30000001 {
                 writer.write("d1", "s", i, IoTDBValue::LONG(i));
             }
@@ -81,7 +81,6 @@ mod testsabc {
         let expected_structure = "---------------------
 Starting Printing the TsFile Sketch
 ---------------------
-TsFile path:/Users/julian/Develop/tsfile-rust/benchmark.tsfile
 Sketch save path:TsFile_sketch_view.txt
 -------------------------------- TsFile Sketch --------------------------------
 file length: 245835939
@@ -136,6 +135,6 @@ file length: 245835939
 			[MetadataIndex:LEAF_MEASUREMENT]
 			└──────[s,245835642]
 ---------------------------------- TsFile Sketch End ----------------------------------";
-        validate_output(current_dir().unwrap().join("benchmark.tsfile").as_path().to_str().unwrap(), expected_structure);
+        validate_output(current_dir().unwrap().join("target/benchmark.tsfile").as_path().to_str().unwrap(), expected_structure);
     }
 }

@@ -7,7 +7,8 @@ use crate::{
     TsFileMetadata, WriteWrapper,
 };
 use std::collections::{BTreeMap, HashMap};
-use std::fs::File;
+use std::fs;
+use std::fs::{create_dir_all, File};
 use std::io::Write;
 use crate::ts_file_config::TsFileConfig;
 use crate::tsfile_io_writer::TsFileIoWriter;
@@ -183,6 +184,9 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
     pub fn new(filename: &'a str, schema: Schema<'a>, config: TsFileConfig) -> TsFileWriter<'a, WriteWrapper<File>> {
+        // Create directory, if not exists
+        create_dir_all(std::path::Path::new(filename).parent().unwrap());
+        // Create the file
         let mut file =
             WriteWrapper::new(File::create(filename.clone()).expect("create failed"));
 

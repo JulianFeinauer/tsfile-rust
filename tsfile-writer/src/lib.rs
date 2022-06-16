@@ -32,7 +32,6 @@ mod statistics;
 mod test;
 pub mod tsfile_writer;
 mod utils;
-mod benchmark;
 mod tsfile_io_writer;
 pub mod test_utils;
 pub mod ts_file_config;
@@ -759,7 +758,7 @@ pub fn write_file_3() {
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
-    let mut writer = TsFileWriter::new("data3.tsfile", schema, Default::default());
+    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default());
 
     TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
     TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
@@ -772,10 +771,10 @@ pub fn write_file_3() {
 
 #[warn(dead_code)]
 fn write_file() {
-    std::fs::remove_file("data.tsfile");
+    std::fs::remove_file("target/data.tsfile");
 
     let zero: [u8; 1] = [0];
-    let mut file = File::create("data.tsfile").expect("create failed");
+    let mut file = File::create("target/data.tsfile").expect("create failed");
     let version: [u8; 1] = [3];
 
     // Header
@@ -870,7 +869,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data3.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data3.tsfile", schema, buffer_writer, Default::default());
 
         TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
         TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
@@ -913,7 +912,7 @@ mod tests {
             .unwrap()
             .as_millis();
 
-        let filename = format!("{}-1-0-0.tsfile", epoch_time_ms);
+        let filename = format!("target/{}-1-0-0.tsfile", epoch_time_ms);
         let mut writer =
             TsFileWriter::new(filename.as_str(), schema, Default::default());
 
@@ -943,7 +942,7 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("write_long.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/write_long.tsfile", schema, Default::default());
 
         let result = writer.write("d1", "s1", 0, IoTDBValue::LONG(0));
 
@@ -975,7 +974,7 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("write_float.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/write_float.tsfile", schema, Default::default());
 
         let result = writer.write("d1", "s1", 0, IoTDBValue::FLOAT(3.141));
 
@@ -1126,7 +1125,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
 
         writer.write("d1", "s1", 1, IoTDBValue::INT(13));
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
@@ -1174,7 +1173,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
 
         writer.write("d1", "s", 1, IoTDBValue::INT(13));
 
@@ -1222,7 +1221,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
 
         writer.write("d1", "s", 1, IoTDBValue::LONG(13));
 
@@ -1269,7 +1268,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
 
         writer.write("d1", "s", 1, IoTDBValue::FLOAT(13.0));
 
@@ -1466,7 +1465,7 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let mut buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer("data123.tsfile", schema, buffer_writer, Default::default());
+        let mut writer = TsFileWriter::new_from_writer("target/data123.tsfile", schema, buffer_writer, Default::default());
 
         for i in 0..1001 {
             writer.write("d1", "s", i, IoTDBValue::INT(i as i32));
@@ -1494,7 +1493,7 @@ mod tests {
             )
             .build();
 
-        let mut writer = TsFileWriter::new("10000_int64.tsfile", schema, Default::default());
+        let mut writer = TsFileWriter::new("target/10000_int64.tsfile", schema, Default::default());
 
         for i in 0..10001 {
             writer.write("d1", "s", i, IoTDBValue::LONG(2 * i));
