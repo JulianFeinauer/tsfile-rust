@@ -92,9 +92,15 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 ### Compression
 
 * [x] Uncompressed
+* [x] SNAPPY
 * [ ] everything else...
 
 ## Changelog
+
+### 0.1.2
+
+- SNAPPY Compression is now available
+- CI Pipeline and cargo fmt used in the codebase
 
 ### 0.1.1
 
