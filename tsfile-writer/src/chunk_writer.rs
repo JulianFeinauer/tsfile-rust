@@ -7,10 +7,10 @@ use crate::{
     utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType,
     TSEncoding, TsFileError, CHUNK_HEADER, ONLY_ONE_PAGE_CHUNK_HEADER,
 };
+use snap::raw::max_compress_len;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use snap::raw::max_compress_len;
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
@@ -365,32 +365,23 @@ impl ChunkWriter {
             let mut compressed_buffer: Vec<u8> = Vec::new();
 
             let compressed_bytes = match self.compression_type {
-                CompressionType::UNCOMPRESSED => {
-                    uncompressed_bytes
-                }
+                CompressionType::UNCOMPRESSED => uncompressed_bytes,
                 CompressionType::SNAPPY => {
                     let mut encoder1 = snap::raw::Encoder::new();
                     let out_buffer_len = max_compress_len(page_writer.buffer.len());
                     let mut out = vec![0; out_buffer_len];
-                    match encoder1.compress(&page_writer.buffer, &mut out.as_mut_slice()) {
+                    match encoder1.compress(&page_writer.buffer, out.as_mut_slice()) {
                         Ok(size) => {
-                            println!("Okay: {}", size);
                             let mut reader = &out.as_mut_slice()[..size];
                             io::copy(&mut reader, &mut compressed_buffer);
                             size as u32
                         }
-                        Err(e) => {
-                            panic!("Error: {}", e);
+                        Err(_) => {
+                            return Err(TsFileError::Compression);
                         }
                     }
-                    // let mut encoder = snap::write::FrameEncoder::new(Vec::new());
-                    // encoder.write_all(&page_writer.buffer);
-                    // encoder.flush();
-                    // io::copy(&mut encoder.get_mut().as_slice(), &mut compressed_buffer);
-                    // compressed_buffer.len() as u32
                 }
             };
-
 
             // TODO we need a change here if multiple pages exist
             if self.num_pages == 0 {
@@ -459,7 +450,10 @@ impl ChunkWriter {
 
                 let pos_after_flush = self.page_buffer.get_position();
 
-                log::trace!("Wrote {} bytes to page buffer", pos_after_flush - pos_before_flush);
+                log::trace!(
+                    "Wrote {} bytes to page buffer",
+                    pos_after_flush - pos_before_flush
+                );
 
                 log::trace!("Page Buffer offset: {}", self.page_buffer.get_position());
 
@@ -487,7 +481,10 @@ impl ChunkWriter {
 
                 let pos_after_flush = self.page_buffer.get_position();
 
-                log::trace!("Wrote {} bytes to page buffer", pos_after_flush - pos_before_flush);
+                log::trace!(
+                    "Wrote {} bytes to page buffer",
+                    pos_after_flush - pos_before_flush
+                );
                 page_writer.buffer.clear();
             }
             self.num_pages += 1;

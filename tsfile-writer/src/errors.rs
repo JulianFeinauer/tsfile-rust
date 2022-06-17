@@ -7,6 +7,7 @@ pub enum TsFileError {
     WriteError,
     OutOfOrderData,
     IllegalState { source: Option<String> },
+    Compression,
 }
 
 impl PartialEq for TsFileError {
@@ -23,6 +24,7 @@ impl PartialEq for TsFileError {
                 TsFileError::IllegalState { source: b } => a == b,
                 _ => false,
             },
+            TsFileError::Compression => matches!(other, TsFileError::Compression),
         }
     }
 }

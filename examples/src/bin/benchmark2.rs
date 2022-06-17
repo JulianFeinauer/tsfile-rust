@@ -18,13 +18,13 @@ fn main() {
                     "s1",
                     TSDataType::INT64,
                     TSEncoding::PLAIN,
-                    CompressionType::UNCOMPRESSED,
+                    CompressionType::SNAPPY,
                 )
                 .add(
                     "s2",
                     TSDataType::FLOAT,
                     TSEncoding::PLAIN,
-                    CompressionType::UNCOMPRESSED,
+                    CompressionType::SNAPPY,
                 )
                 .build(),
         )
@@ -35,13 +35,13 @@ fn main() {
                     "s1",
                     TSDataType::INT64,
                     TSEncoding::PLAIN,
-                    CompressionType::UNCOMPRESSED,
+                    CompressionType::SNAPPY,
                 )
                 .add(
                     "s2",
                     TSDataType::FLOAT,
                     TSEncoding::PLAIN,
-                    CompressionType::UNCOMPRESSED,
+                    CompressionType::SNAPPY,
                 )
                 .build(),
         )
