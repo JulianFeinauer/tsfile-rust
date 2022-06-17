@@ -5,24 +5,109 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+7
 jobs:
+  format:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt
+
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+
+  check:
+    runs-on: ubuntu-20.04
+
+    needs:
+      - format
+
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - 1.60.0 # msrv (minimum supported rust version)
+          - 1.59.0 # msrv (minimum supported rust version)
+        target:
+          - x86_64-unknown-linux-gnu
+          - wasm32-unknown-unknown
+        include:
+          - target: wasm32-unknown-unknown
+            features: "--no-default-features --features wasm"
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          target: ${{ matrix.target }}
+          override: true
+          components: clippy
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --target ${{ matrix.target }} ${{ matrix.features }}
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --target ${{ matrix.target }} ${{ matrix.features }} -- -D warnings
+
+
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
+
+    needs:
+      - check
+
     steps:
-      - uses: actions/checkout@v1
-      - uses: icepuma/rust-action@1.59.0
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/cache@v3
         with:
-          args: cd tsfile-writer && cargo fmt -- --check && cargo clippy -- -Dwarnings && cargo test
-#          args: cargo fmt -- --check && cargo test
-  sonarcloud:
-    name: SonarCloud
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          toolchain: stable
+          override: true
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
