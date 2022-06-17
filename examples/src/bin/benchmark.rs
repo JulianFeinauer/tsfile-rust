@@ -21,9 +21,10 @@ fn main() {
         let start = SystemTime::now();
         write_ts_file("target/benchmark.tsfile", schema.clone(), |writer| {
             for i in 0..100000001 {
-                writer.write("d1", "s", i, IoTDBValue::LONG(i));
+                writer.write("d1", "s", i, IoTDBValue::LONG(i)).expect("");
             }
-        });
+        })
+        .expect("");
         let end = SystemTime::now();
 
         let duration = end.duration_since(start);

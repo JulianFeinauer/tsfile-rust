@@ -62,22 +62,26 @@ fn main() {
             // writer.write("d2", "s1", i, IoTDBValue::LONG(i));
             // writer.write("d2", "s2", i, IoTDBValue::FLOAT(i as f32));
 
-            writer.write_many(
-                "d1",
-                i,
-                vec![
-                    DataPoint::new("s1", IoTDBValue::LONG(i)),
-                    DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
-                ],
-            );
-            writer.write_many(
-                "d2",
-                i,
-                vec![
-                    DataPoint::new("s1", IoTDBValue::LONG(i)),
-                    DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
-                ],
-            );
+            writer
+                .write_many(
+                    "d1",
+                    i,
+                    vec![
+                        DataPoint::new("s1", IoTDBValue::LONG(i)),
+                        DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+                    ],
+                )
+                .expect("");
+            writer
+                .write_many(
+                    "d2",
+                    i,
+                    vec![
+                        DataPoint::new("s1", IoTDBValue::LONG(i)),
+                        DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+                    ],
+                )
+                .expect("");
         }
         writer.close();
 

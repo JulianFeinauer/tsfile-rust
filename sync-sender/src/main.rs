@@ -6,18 +6,11 @@ use crate::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
 use pnet::datalink;
 use sha2::Digest;
 use std::fs;
-use std::io::Write;
 use std::thread::sleep;
 use std::time::Duration;
-use thrift::protocol::TType::String;
-use thrift::protocol::{
-    TBinaryInputProtocol, TBinaryOutputProtocol, TCompactInputProtocol, TCompactOutputProtocol,
-};
-use thrift::protocol::{TInputProtocol, TOutputProtocol};
+use thrift::protocol::{TBinaryInputProtocol, TBinaryOutputProtocol};
 use thrift::transport::{TFramedReadTransport, TFramedWriteTransport};
 use thrift::transport::{TIoChannel, TTcpChannel};
-use thrift::TThriftClient;
-use uuid::Uuid;
 
 // TODO what is this?
 const PARTITION_INTERVAL: i64 = 604800;
@@ -68,7 +61,7 @@ fn run() -> thrift::Result<()> {
         }
         Err(_) => {
             println!("Generating UUID...");
-            let uuid = uuid::Uuid::new_v4().to_string().replace("-", "");
+            let uuid = uuid::Uuid::new_v4().to_string().replace('-', "");
             // Save to file
             match fs::write("uuid.lock", &uuid) {
                 Ok(_) => {
@@ -100,12 +93,12 @@ fn run() -> thrift::Result<()> {
     client.init(std::string::String::from("root.sg")).expect("");
 
     // First sync a schema
-    client.init_sync_data(std::string::String::from("mlog.bin"));
+    client.init_sync_data(std::string::String::from("mlog.bin"))?;
 
     // Create the mlog
-    let mlog_bytes: Vec<u8> = write_mlog();
+    let mlog_bytes: Vec<u8> = write_mlog().expect("Unable to write mlog");
 
-    client.sync_data(mlog_bytes.clone());
+    client.sync_data(mlog_bytes.clone())?;
 
     let digest = calculate_digest(&mlog_bytes);
     println!("Digest of Sender: {}", digest);
@@ -147,7 +140,7 @@ fn run() -> thrift::Result<()> {
             println!("Error on digest!")
         }
     }
-    client.end_sync();
+    client.end_sync()?;
 
     sleep(Duration::from_secs(100));
 
@@ -155,13 +148,13 @@ fn run() -> thrift::Result<()> {
     Ok(())
 }
 
-fn calculate_digest(writer: &Vec<u8>) -> std::string::String {
+fn calculate_digest(writer: &[u8]) -> std::string::String {
     let sha256 = sha2::Sha256::digest(&writer);
     let digest = sha256.as_slice();
     let digest = hex::encode(digest);
 
     // Remove leading 0es
-    let digest = digest.trim_start_matches("0").to_string();
+    let digest = digest.trim_start_matches('0').to_string();
 
     digest
 }
@@ -169,23 +162,24 @@ fn calculate_digest(writer: &Vec<u8>) -> std::string::String {
 use crate::mlog::MLog;
 use tsfile_writer::compression::CompressionType;
 use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::errors::TsFileError;
 use tsfile_writer::TSDataType;
 
-pub fn write_mlog() -> Vec<u8> {
+pub fn write_mlog() -> Result<Vec<u8>, TsFileError> {
     // Create the mlog
     let mut m_log = MLog::new();
     let mut mlog_buffer: Vec<u8> = vec![];
 
-    m_log.set_storage_group_plan("root.sg");
-    m_log.flush(&mut mlog_buffer);
+    m_log.set_storage_group_plan("root.sg")?;
+    m_log.flush(&mut mlog_buffer)?;
 
     m_log.create_plan(
         "root.sg.d1.s1",
         TSDataType::INT32,
         TSEncoding::PLAIN,
         CompressionType::UNCOMPRESSED,
-    );
-    m_log.flush(&mut mlog_buffer);
+    )?;
+    m_log.flush(&mut mlog_buffer)?;
 
-    return mlog_buffer;
+    Ok(mlog_buffer)
 }
