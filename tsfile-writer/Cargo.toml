@@ -10,3 +10,4 @@ repository = "https://github.com/JulianFeinauer/tsfile-rust/tree/main/tsfile-wri
 
 [dependencies]
 log = "0.4.17"
+snap = "1.0.5"
