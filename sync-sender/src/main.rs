@@ -148,7 +148,7 @@ fn run() -> thrift::Result<()> {
     Ok(())
 }
 
-fn calculate_digest(writer: &Vec<u8>) -> std::string::String {
+fn calculate_digest(writer: &[u8]) -> std::string::String {
     let sha256 = sha2::Sha256::digest(&writer);
     let digest = sha256.as_slice();
     let digest = hex::encode(digest);

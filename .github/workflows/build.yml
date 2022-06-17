@@ -38,6 +38,7 @@ jobs:
         toolchain:
           - stable
           - 1.60.0 # msrv (minimum supported rust version)
+          - 1.59.0 # msrv (minimum supported rust version)
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
