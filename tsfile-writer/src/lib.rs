@@ -8,19 +8,6 @@ use std::hash::Hash;
 use std::io::Write;
 use std::{io, vec};
 
-use crate::chunk_writer::ChunkMetadata;
-use crate::errors::TsFileError;
-use compression::CompressionType;
-use encoding::TSEncoding;
-use tsfile_writer::TsFileWriter;
-
-use crate::murmur128::Murmur128;
-use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
-use crate::statistics::Statistics;
-use crate::ts_file_config::TsFileConfig;
-use crate::utils::{write_var_i32, write_var_u32};
-use crate::MetadataIndexNodeType::LeafDevice;
-
 mod chunk_writer;
 pub mod compression;
 pub mod encoding;
@@ -35,6 +22,19 @@ pub mod ts_file_config;
 mod tsfile_io_writer;
 pub mod tsfile_writer;
 mod utils;
+
+use crate::chunk_writer::ChunkMetadata;
+use crate::compression::CompressionType;
+use crate::encoding::TSEncoding;
+use crate::errors::TsFileError;
+
+use crate::murmur128::Murmur128;
+use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
+use crate::statistics::Statistics;
+use crate::ts_file_config::TsFileConfig;
+use crate::tsfile_writer::TsFileWriter;
+use crate::utils::{write_var_i32, write_var_u32};
+use crate::MetadataIndexNodeType::LeafDevice;
 
 /// Central enum to pass Values to the writer
 #[allow(dead_code)]
@@ -90,7 +90,7 @@ impl<T: Write> WriteWrapper<T> {
 
 impl PositionedWrite for Vec<u8> {
     fn get_position(&self) -> u64 {
-        return self.len() as u64;
+        self.len() as u64
     }
 }
 

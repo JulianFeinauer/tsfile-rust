@@ -1,8 +1,7 @@
 use std::io::Write;
-use std::marker::PhantomData;
 
 use crate::encoding::Encoder;
-use crate::{utils, IoTDBValue, PositionedWrite};
+use crate::{utils, IoTDBValue};
 use crate::{TSDataType, TsFileError};
 
 pub struct PlainEncoder {
