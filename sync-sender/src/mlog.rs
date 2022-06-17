@@ -2,6 +2,7 @@ use std::io::Write;
 
 use tsfile_writer::compression::CompressionType;
 use tsfile_writer::encoding::TSEncoding;
+use tsfile_writer::errors::TsFileError;
 use tsfile_writer::TSDataType;
 
 pub struct MLog {
@@ -17,17 +18,17 @@ impl MLog {
         let checksum = Self::calculate_checksum(&self.bytes);
         let length = self.bytes.len() as i32;
 
-        writer.write(&length.to_be_bytes())?;
-        writer.write(&self.bytes)?;
-        writer.write(&checksum.to_be_bytes())?;
+        writer.write_all(&length.to_be_bytes())?;
+        writer.write_all(&self.bytes)?;
+        writer.write_all(&checksum.to_be_bytes())?;
 
         self.bytes.clear();
 
         Ok(0)
     }
 
-    fn calculate_checksum(bytes: &Vec<u8>) -> i64 {
-        crc32fast::hash(&bytes) as i64
+    fn calculate_checksum(bytes: &[u8]) -> i64 {
+        crc32fast::hash(bytes) as i64
     }
 
     pub fn create_plan(
@@ -36,7 +37,7 @@ impl MLog {
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
-    ) {
+    ) -> Result<(), TsFileError> {
         Self::write_create_plan(&mut self.bytes, path, data_type, encoding, compression)
     }
 
@@ -46,30 +47,30 @@ impl MLog {
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
-    ) {
+    ) -> Result<(), TsFileError> {
         // stream.writeByte((byte) PhysicalPlanType.CREATE_TIMESERIES.ordinal());
-        writer.write(&[0x04]);
+        writer.write_all(&[0x04])?;
         // byte[] bytes = path.getFullPath().getBytes();
         let bytes = path.as_bytes();
         // stream.writeInt(bytes.length);
-        writer.write(&(bytes.len() as i32).to_be_bytes());
+        writer.write_all(&(bytes.len() as i32).to_be_bytes())?;
         // stream.write(bytes);
-        writer.write(bytes);
+        writer.write_all(bytes)?;
         // stream.write(dataType.ordinal());
-        writer.write(&[data_type.serialize()]);
+        writer.write_all(&[data_type.serialize()])?;
         // stream.write(encoding.ordinal());
-        writer.write(&[encoding.serialize()]);
+        writer.write_all(&[encoding.serialize()])?;
         // stream.write(compressor.ordinal());
-        writer.write(&[compression.serialize()]);
+        writer.write_all(&[compression.serialize()])?;
         // stream.writeLong(tagOffset);
-        writer.write(&(-1 as i64).to_be_bytes());
+        writer.write_all(&(-1_i64).to_be_bytes())?;
         // // alias
         // if (alias != null) {
         //   stream.write(1);
         //   ReadWriteIOUtils.write(alias, stream);
         // } else {
         //   stream.write(0);
-        writer.write(&[0x00]);
+        writer.write_all(&[0x00])?;
         // }
         //
         // // props
@@ -78,7 +79,7 @@ impl MLog {
         //   ReadWriteIOUtils.write(props, stream);
         // } else {
         //   stream.write(0);
-        writer.write(&[0x00]);
+        writer.write_all(&[0x00])?;
         // }
         //
         // // tags
@@ -87,7 +88,7 @@ impl MLog {
         //   ReadWriteIOUtils.write(tags, stream);
         // } else {
         //   stream.write(0);
-        writer.write(&[0x00]);
+        writer.write_all(&[0x00])?;
         // }
         //
         // // attributes
@@ -96,26 +97,32 @@ impl MLog {
         //   ReadWriteIOUtils.write(attributes, stream);
         // } else {
         //   stream.write(0);
-        writer.write(&[0x00]);
+        writer.write_all(&[0x00])?;
         // }
         //
         // stream.writeLong(index);
-        writer.write(&0_i64.to_be_bytes());
+        writer.write_all(&0_i64.to_be_bytes())?;
+
+        Ok(())
     }
 
-    pub(crate) fn set_storage_group_plan(&mut self, path: &str) {
+    pub(crate) fn set_storage_group_plan(&mut self, path: &str) -> Result<(), TsFileError> {
         Self::write_set_storage_group_plan(&mut self.bytes, path)
     }
 
-    pub(crate) fn write_set_storage_group_plan(writer: &mut dyn Write, path: &str) {
+    pub(crate) fn write_set_storage_group_plan(
+        writer: &mut dyn Write,
+        path: &str,
+    ) -> Result<(), TsFileError> {
         // buffer.put((byte) PhysicalPlanType.SET_STORAGE_GROUP.ordinal());
-        writer.write(&[0x03]);
+        writer.write_all(&[0x03])?;
         // putString(buffer, path.getFullPath());
         let bytes = path.as_bytes();
-        writer.write(&(bytes.len() as i32).to_be_bytes());
-        writer.write(&bytes);
+        writer.write_all(&(bytes.len() as i32).to_be_bytes())?;
+        writer.write_all(bytes)?;
         // buffer.putLong(index);
-        writer.write(&(0x00 as i64).to_be_bytes());
+        writer.write_all(&(0x00_i64).to_be_bytes())?;
+        Ok(())
     }
 }
 
