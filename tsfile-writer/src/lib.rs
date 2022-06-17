@@ -45,6 +45,9 @@ pub enum IoTDBValue {
     LONG(i64),
 }
 
+/// Extension of the Write trait
+/// that allows to get the position of the "buffer"
+/// via the `get_position()` method
 pub trait PositionedWrite: Write {
     fn get_position(&self) -> u64;
 }
