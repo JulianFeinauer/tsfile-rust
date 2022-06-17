@@ -1,7 +1,9 @@
 use std::cmp::max;
 use std::io::Write;
+use crate::encoding::Encoder;
+use crate::{IoTDBValue, TsFileError};
 
-pub struct TimeEncoder {
+pub struct Ts2DiffEncoder {
     first_value: Option<i64>,
     min_delta: i64,
     previous_value: i64,
@@ -9,7 +11,7 @@ pub struct TimeEncoder {
     buffer: Vec<u8>,
 }
 
-impl TimeEncoder {
+impl Ts2DiffEncoder {
     pub(crate) fn reset(&mut self) {
         self.first_value = None;
         self.min_delta = i64::MAX;
@@ -19,17 +21,72 @@ impl TimeEncoder {
     }
 }
 
-impl TimeEncoder {
-    pub(crate) fn size(&self) -> u32 {
+impl Encoder for Ts2DiffEncoder {
+    fn write(&mut self, value: &IoTDBValue) -> Result<(), TsFileError> {
+        let value = match value {
+            IoTDBValue::LONG(v) => {v.clone()},
+            _ => {
+                return Err(TsFileError::WrongTypeForSeries);
+            }
+        };
+        match self.first_value {
+            None => {
+                self.first_value = Some(value);
+                self.previous_value = value;
+            }
+            Some(_) => {
+                // calc delta
+                let delta = value - self.previous_value;
+                // If delta is min, store it
+                if delta < self.min_delta {
+                    self.min_delta = delta;
+                }
+                // store delta
+                self.values.push(delta);
+                self.previous_value = value;
+            }
+        }
+        if self.values.len() == 128 {
+            self.flush();
+        }
+        Ok(())
+    }
+
+    fn size(&mut self) -> u32 {
         self.buffer.len() as u32
     }
-    pub(crate) fn get_max_byte_size(&self) -> u32 {
+    fn get_max_byte_size(&self) -> u32 {
         // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
         (24 + self.values.len() * 8) as u32
     }
+
+    fn serialize(&mut self, buffer: &mut Vec<u8>) {
+        // Flush
+        self.flush();
+        // Copy internal buffer to out buffer
+        buffer.write_all(&self.buffer);
+    }
+
+    fn reset(&mut self) {
+        // Now reset everything
+        self.values.clear();
+        self.first_value = None;
+        self.previous_value = 0;
+        self.min_delta = i64::MAX;
+    }
 }
 
-impl TimeEncoder {
+impl Ts2DiffEncoder {
+    pub(crate) fn new() -> Ts2DiffEncoder {
+        Ts2DiffEncoder {
+            first_value: None,
+            min_delta: i64::MAX,
+            previous_value: i64::MAX,
+            values: vec![],
+            buffer: vec![],
+        }
+    }
+
     fn get_value_width(v: i64) -> u32 {
         64 - v.leading_zeros()
     }
@@ -91,18 +148,6 @@ impl TimeEncoder {
             }
         }
     }
-}
-
-impl TimeEncoder {
-    pub(crate) fn new() -> TimeEncoder {
-        TimeEncoder {
-            first_value: None,
-            min_delta: i64::MAX,
-            previous_value: i64::MAX,
-            values: vec![],
-            buffer: vec![],
-        }
-    }
 
     fn flush(&mut self) {
         if self.first_value == None {
@@ -153,50 +198,17 @@ impl TimeEncoder {
     }
 }
 
-impl TimeEncoder {
-    pub(crate) fn encode(&mut self, value: i64) {
-        match self.first_value {
-            None => {
-                self.first_value = Some(value);
-                self.previous_value = value;
-            }
-            Some(_) => {
-                // calc delta
-                let delta = value - self.previous_value;
-                // If delta is min, store it
-                if delta < self.min_delta {
-                    self.min_delta = delta;
-                }
-                // store delta
-                self.values.push(delta);
-                self.previous_value = value;
-            }
-        }
-        if self.values.len() == 128 {
-            self.flush();
-        }
-    }
-
-    #[allow(unused_variables)]
-    pub(crate) fn serialize(&mut self, buffer: &mut Vec<u8>) {
-        // Flush
-        self.flush();
-        // Copy internal buffer to out buffer
-        buffer.write_all(&self.buffer);
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::encoding::TimeEncoder;
+    use crate::encoding::Ts2DiffEncoder;
 
     #[test]
     fn test_long_to_bytes() {
         let mut result = vec![];
         let width = 4;
-        TimeEncoder::long_to_bytes(1, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(1, &mut result, width * 2, width as u32);
+        Ts2DiffEncoder::long_to_bytes(1, &mut result, width * 0, width as u32);
+        Ts2DiffEncoder::long_to_bytes(1, &mut result, width * 1, width as u32);
+        Ts2DiffEncoder::long_to_bytes(1, &mut result, width * 2, width as u32);
 
         assert_eq!(result, [0b00010001, 0b00010000])
     }
@@ -205,9 +217,9 @@ mod tests {
     fn test_long_to_bytes_2() {
         let mut result = vec![];
         let width = 7;
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 1, width as u32);
-        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 2, width as u32);
+        Ts2DiffEncoder::long_to_bytes(0b0000001, &mut result, width * 0, width as u32);
+        Ts2DiffEncoder::long_to_bytes(0b0000001, &mut result, width * 1, width as u32);
+        Ts2DiffEncoder::long_to_bytes(0b0000001, &mut result, width * 2, width as u32);
 
         assert_eq!(result, [0b00000010, 0b00000100, 0b00001000])
     }
@@ -216,8 +228,8 @@ mod tests {
     fn test_long_to_bytes_3() {
         let mut result = vec![];
         let width = 7;
-        TimeEncoder::long_to_bytes(0, &mut result, width * 0, width as u32);
-        TimeEncoder::long_to_bytes(81, &mut result, width * 1, width as u32);
+        Ts2DiffEncoder::long_to_bytes(0, &mut result, width * 0, width as u32);
+        Ts2DiffEncoder::long_to_bytes(81, &mut result, width * 1, width as u32);
 
         assert_eq!(result, [1, 68])
     }

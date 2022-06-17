@@ -1,5 +1,5 @@
 use crate::encoding::Encoder;
-use crate::encoding::TimeEncoder;
+use crate::encoding::Ts2DiffEncoder;
 use crate::statistics::Statistics;
 use crate::tsfile_io_writer::TsFileIoWriter;
 use crate::utils::{size_var_i32, size_var_u32};
@@ -18,7 +18,7 @@ const PAGE_SIZE_THRESHOLD: u32 = 65536;
 const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
 struct PageWriter {
-    time_encoder: TimeEncoder,
+    time_encoder: Ts2DiffEncoder,
     value_encoder: Box<dyn Encoder>,
     data_type: TSDataType,
     statistics: Statistics,
@@ -28,15 +28,15 @@ struct PageWriter {
 }
 
 impl PageWriter {
-    fn new(data_type: TSDataType, encoding: TSEncoding) -> PageWriter {
-        PageWriter {
-            time_encoder: TimeEncoder::new(),
-            value_encoder: <dyn Encoder>::new(data_type, encoding),
+    fn new(data_type: TSDataType, encoding: TSEncoding) -> Result<PageWriter, TsFileError> {
+        Ok(PageWriter {
+            time_encoder: Ts2DiffEncoder::new(),
+            value_encoder: <dyn Encoder>::new(data_type, encoding)?,
             data_type,
             statistics: Statistics::new(data_type),
             buffer: Vec::with_capacity(65536),
             point_number: 0,
-        }
+        })
     }
 
     pub(crate) fn reset(&mut self) {
@@ -58,7 +58,7 @@ impl PageWriter {
     }
 
     fn write(&mut self, timestamp: i64, value: &mut IoTDBValue) -> Result<u32, &str> {
-        self.time_encoder.encode(timestamp);
+        self.time_encoder.write(&timestamp.into());
         self.value_encoder.write(value);
         self.statistics.update(timestamp, value);
         self.point_number += 1;
@@ -280,12 +280,12 @@ impl ChunkWriter {
         }
     }
 
-    pub fn write(&mut self, timestamp: i64, mut value: IoTDBValue) -> Result<u32, &str> {
+    pub fn write(&mut self, timestamp: i64, mut value: IoTDBValue) -> Result<u32, TsFileError> {
         // self.statistics.update(timestamp, &value);
         match &mut self.current_page_writer {
             None => {
                 // Create a page
-                self.current_page_writer = Some(PageWriter::new(self.data_type, self.encoding))
+                self.current_page_writer = Some(PageWriter::new(self.data_type, self.encoding)?)
             }
             Some(_) => {
                 // do nothing

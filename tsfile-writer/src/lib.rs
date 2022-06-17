@@ -45,6 +45,12 @@ pub enum IoTDBValue {
     LONG(i64),
 }
 
+impl From<i64> for IoTDBValue {
+    fn from(x: i64) -> Self {
+        IoTDBValue::LONG(x)
+    }
+}
+
 /// Extension of the Write trait
 /// that allows to get the position of the "buffer"
 /// via the `get_position()` method
@@ -1654,6 +1660,25 @@ mod tests {
         writer.close();
 
         assert_eq!(expected, writer.file_io_writer.out.as_slice());
+    }
+
+    #[test]
+    fn use_ts2diff() -> Result<(), TsFileError> {
+        let schema = Schema::simple(
+            "d1",
+            "s1",
+            TSDataType::INT64,
+            TSEncoding::TS2DIFF,
+            CompressionType::UNCOMPRESSED,
+        );
+
+        let mut writer = TsFileWriter::new("target/test.tsfile", schema, Default::default())?;
+
+        writer.write("d1", "s1", 1, IoTDBValue::LONG(1))?;
+
+        writer.close();
+
+        Ok(())
     }
 }
 
