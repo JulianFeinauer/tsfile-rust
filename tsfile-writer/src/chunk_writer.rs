@@ -56,7 +56,7 @@ impl PageWriter {
         max_size
     }
 
-    fn write(&mut self, timestamp: i64, value: &IoTDBValue) -> Result<u32, &str> {
+    fn write(&mut self, timestamp: i64, value: &mut IoTDBValue) -> Result<u32, &str> {
         self.time_encoder.encode(timestamp);
         self.value_encoder.write(value);
         self.statistics.update(timestamp, value);
@@ -279,7 +279,7 @@ impl ChunkWriter {
         }
     }
 
-    pub fn write(&mut self, timestamp: i64, value: IoTDBValue) -> Result<u32, &str> {
+    pub fn write(&mut self, timestamp: i64, mut value: IoTDBValue) -> Result<u32, &str> {
         // self.statistics.update(timestamp, &value);
         match &mut self.current_page_writer {
             None => {
@@ -294,7 +294,7 @@ impl ChunkWriter {
             None => {
                 panic!("Something bad happened!");
             }
-            Some(page_writer) => page_writer.write(timestamp, &value).unwrap(),
+            Some(page_writer) => page_writer.write(timestamp, &mut value).unwrap(),
         };
         self.check_page_size_and_may_open_new_page();
         Ok(records_written)

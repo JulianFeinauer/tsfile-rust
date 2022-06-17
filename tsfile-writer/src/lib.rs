@@ -85,6 +85,12 @@ impl<T: Write> WriteWrapper<T> {
     }
 }
 
+impl PositionedWrite for Vec<u8> {
+    fn get_position(&self) -> u64 {
+        return self.len() as u64;
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum TSDataType {
     INT32,

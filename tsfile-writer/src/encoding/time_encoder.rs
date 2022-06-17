@@ -185,3 +185,40 @@ impl TimeEncoder {
         buffer.write_all(&self.buffer);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::TimeEncoder;
+
+    #[test]
+    fn test_long_to_bytes() {
+        let mut result = vec![];
+        let width = 4;
+        TimeEncoder::long_to_bytes(1, &mut result, width * 0, width as u32);
+        TimeEncoder::long_to_bytes(1, &mut result, width * 1, width as u32);
+        TimeEncoder::long_to_bytes(1, &mut result, width * 2, width as u32);
+
+        assert_eq!(result, [0b00010001, 0b00010000])
+    }
+
+    #[test]
+    fn test_long_to_bytes_2() {
+        let mut result = vec![];
+        let width = 7;
+        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 0, width as u32);
+        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 1, width as u32);
+        TimeEncoder::long_to_bytes(0b0000001, &mut result, width * 2, width as u32);
+
+        assert_eq!(result, [0b00000010, 0b00000100, 0b00001000])
+    }
+
+    #[test]
+    fn test_long_to_bytes_3() {
+        let mut result = vec![];
+        let width = 7;
+        TimeEncoder::long_to_bytes(0, &mut result, width * 0, width as u32);
+        TimeEncoder::long_to_bytes(81, &mut result, width * 1, width as u32);
+
+        assert_eq!(result, [1, 68])
+    }
+}
