@@ -3,8 +3,8 @@ use crate::{IoTDBValue, TSDataType, TsFileError};
 pub mod plain;
 pub mod time_encoder;
 
-pub use time_encoder::TimeEncoder;
 use crate::encoding::plain::PlainEncoder;
+pub use time_encoder::TimeEncoder;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
