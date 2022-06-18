@@ -71,7 +71,7 @@ macro_rules! ts2diff_encoder {
             }
             fn get_max_byte_size(&self) -> u32 {
                 // The meaning of 24 is: index(4)+width(4)+minDeltaBase(8)+firstValue(8)
-                (24 + self.values.len() * 8) as u32
+                (24 + self.values.len() * $num_bits/8) as u32
             }
 
             fn serialize(&mut self, buffer: &mut Vec<u8>) {
@@ -134,10 +134,8 @@ macro_rules! ts2diff_encoder {
                 // Write Header
                 // Write number of entries
                 let number_of_entries: u32 = self.values.len() as u32;
-                println!("Number of entries: {}", number_of_entries);
                 self.buffer.write_all(&number_of_entries.to_be_bytes());
                 // Write "write-width"
-                println!("Write width: {}", write_width);
                 self.buffer.write_all(&write_width.to_be_bytes());
 
                 // Min Delta Base
@@ -224,8 +222,33 @@ impl LongTs2DiffEncoder {
 }
 
 impl IntTs2DiffEncoder {
-    pub(crate) fn to_bytes(number: i32, result: &mut Vec<u8>, pos: usize, width: u32) {
-        todo!()
+    pub(crate) fn to_bytes(number: i32, result: &mut Vec<u8>, pos: usize, mut width: u32) {
+        let mut cnt = (pos & 0x07) as u8;
+        let mut index = pos >> 3;
+
+        let mut my_width = width as u8;
+        let mut my_number = number;
+
+        while (my_width > 0) {
+            let m = if my_width + cnt >= 8 { 8 - cnt } else { my_width };
+            my_width -= m;
+            let mut mask = (1_u16 << (8 - cnt)) as i32;
+            cnt += m;
+            let mut y = (my_number >> my_width) as u8;
+            y = y << (8 - cnt);
+            mask = !(mask - (1_u16 << (8 - cnt)) as i32);
+
+            if index <= result.len() {
+                result.resize(index + 1, 0);
+            }
+
+            result[index] = (result[index] & (mask as u8) | y);
+            my_number = my_number & !(-1 << my_width);
+            if (cnt == 8) {
+              index += 1;
+              cnt = 0;
+            }
+        }
     }
 }
 
@@ -233,7 +256,7 @@ impl IntTs2DiffEncoder {
 #[cfg(test)]
 mod tests {
     use crate::encoding::Encoder;
-    use crate::encoding::time_encoder::LongTs2DiffEncoder;
+    use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
     use crate::{IoTDBValue, TsFileError};
 
     #[test]
@@ -268,4 +291,14 @@ mod tests {
         assert_eq!(result, [1, 68])
     }
 
+    #[test]
+    fn test_int_to_bytes() {
+        let mut result = vec![];
+        let width = 4;
+        IntTs2DiffEncoder::to_bytes(1, &mut result, width * 0, width as u32);
+        IntTs2DiffEncoder::to_bytes(1, &mut result, width * 1, width as u32);
+        IntTs2DiffEncoder::to_bytes(1, &mut result, width * 2, width as u32);
+
+        assert_eq!(result, [0b00010001, 0b00010000])
+    }
 }

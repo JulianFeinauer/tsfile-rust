@@ -4,7 +4,7 @@ pub mod plain;
 pub mod time_encoder;
 
 use crate::encoding::plain::PlainEncoder;
-use crate::encoding::time_encoder::LongTs2DiffEncoder;
+use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
@@ -34,7 +34,7 @@ impl dyn Encoder {
         match (data_type, encoding) {
             (_, TSEncoding::PLAIN) => Ok(Box::new(PlainEncoder::new(data_type))),
             (TSDataType::INT64, TSEncoding::TS2DIFF) => Ok(Box::new(LongTs2DiffEncoder::new())),
-            // (TSDataType::INT64, TSEncoding::TS2DIFF) => Ok(ts2diff::new(data_type)?),
+            (TSDataType::INT32, TSEncoding::TS2DIFF) => Ok(Box::new(IntTs2DiffEncoder::new())),
             (_, TSEncoding::TS2DIFF) => Err(TsFileError::Encoding),
         }
     }

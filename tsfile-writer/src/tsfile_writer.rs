@@ -215,13 +215,12 @@ impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
         // Create the file
         let file = WriteWrapper::new(File::create(filename).expect("create failed"));
 
-        TsFileWriter::new_from_writer(filename, schema, file, config)
+        TsFileWriter::new_from_writer(schema, file, config)
     }
 }
 
 impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
     pub(crate) fn new_from_writer(
-        filename: &'a str,
         schema: Schema<'a>,
         file_writer: T,
         config: TsFileConfig,
@@ -258,7 +257,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
         let io_writer = TsFileIoWriter::new(file_writer, config)?;
         Ok(TsFileWriter {
-            filename: String::from(filename),
+            filename: String::from(""),
             schema,
             group_writers,
             chunk_group_metadata: vec![],
