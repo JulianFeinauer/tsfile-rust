@@ -9,7 +9,7 @@ pub enum TsFileError {
     IllegalState { source: Option<String> },
     Compression,
     WrongTypeForSeries,
-    Encoding
+    Encoding,
 }
 
 impl PartialEq for TsFileError {
@@ -28,7 +28,7 @@ impl PartialEq for TsFileError {
             },
             TsFileError::Compression => matches!(other, TsFileError::Compression),
             TsFileError::WrongTypeForSeries => matches!(other, TsFileError::WrongTypeForSeries),
-            TsFileError::Encoding => matches!(other, TsFileError::Encoding)
+            TsFileError::Encoding => matches!(other, TsFileError::Encoding),
         }
     }
 }

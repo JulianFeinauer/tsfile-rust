@@ -1,3 +1,4 @@
+use crate::encoding::time_encoder::LongTs2DiffEncoder;
 use crate::encoding::Encoder;
 use crate::statistics::Statistics;
 use crate::tsfile_io_writer::TsFileIoWriter;
@@ -10,7 +11,6 @@ use snap::raw::max_compress_len;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use crate::encoding::time_encoder::LongTs2DiffEncoder;
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
