@@ -3,6 +3,7 @@ use crate::{IoTDBValue, TSDataType, TsFileError};
 pub mod plain;
 pub mod time_encoder;
 mod ts2diff;
+mod time_encoder3;
 
 use crate::encoding::plain::PlainEncoder;
 pub use time_encoder::Ts2DiffEncoder;

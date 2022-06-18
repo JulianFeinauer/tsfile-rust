@@ -38,6 +38,7 @@ use crate::MetadataIndexNodeType::LeafDevice;
 
 /// Central enum to pass Values to the writer
 #[allow(dead_code)]
+#[derive(Clone)]
 pub enum IoTDBValue {
     DOUBLE(f64),
     FLOAT(f32),
