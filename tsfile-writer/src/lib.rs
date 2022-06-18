@@ -38,11 +38,18 @@ use crate::MetadataIndexNodeType::LeafDevice;
 
 /// Central enum to pass Values to the writer
 #[allow(dead_code)]
+#[derive(Clone)]
 pub enum IoTDBValue {
     DOUBLE(f64),
     FLOAT(f32),
     INT(i32),
     LONG(i64),
+}
+
+impl From<i64> for IoTDBValue {
+    fn from(x: i64) -> Self {
+        IoTDBValue::LONG(x)
+    }
 }
 
 /// Extension of the Write trait
@@ -840,13 +847,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data3.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
         TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
@@ -1097,13 +1099,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data123.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s1", 1, IoTDBValue::INT(13));
         writer.write("d1", "s2", 1, IoTDBValue::LONG(14));
@@ -1151,13 +1148,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data123.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::INT(13));
 
@@ -1204,13 +1196,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data123.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::LONG(13));
 
@@ -1256,13 +1243,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data123.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         writer.write("d1", "s", 1, IoTDBValue::FLOAT(13.0));
 
@@ -1458,13 +1440,8 @@ mod tests {
         let buffer: Vec<u8> = vec![];
         let buffer_writer = WriteWrapper::new(buffer);
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/data123.tsfile",
-            schema,
-            buffer_writer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer =
+            TsFileWriter::new_from_writer(schema, buffer_writer, Default::default()).unwrap();
 
         for i in 0..1001 {
             writer.write("d1", "s", i, IoTDBValue::INT(i as i32));
@@ -1555,20 +1532,111 @@ mod tests {
             )
             .build();
 
-        let mut buffer: Vec<u8> = Vec::new();
+        let buffer: Vec<u8> = Vec::new();
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/write_long.tsfile",
-            schema,
-            buffer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer = TsFileWriter::new_from_writer(schema, buffer, Default::default()).unwrap();
 
         writer.write("d1", "s1", 1, IoTDBValue::LONG(13));
         writer.close();
 
         assert_eq!(expected, writer.file_io_writer.out.as_slice());
+    }
+
+    #[test]
+    fn write_i64_ts2diff() -> Result<(), TsFileError> {
+        let expected = [
+            0x54, 0x73, 0x46, 0x69, 0x6C, 0x65, 0x03, 0x00, 0x04, 0x64, 0x31, 0x05, 0x04, 0x73,
+            0x31, 0x33, 0x02, 0x00, 0x04, 0x31, 0x31, 0x18, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x02, 0x00, 0x04, 0x73, 0x31, 0x02, 0x08, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+            0x40, 0x46, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x0B, 0x01, 0x04, 0x73, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8E, 0x03, 0x01, 0x04, 0x64, 0x31, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xA3, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46, 0x1F, 0x04, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01,
+            0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+            0x80, 0x02, 0x05, 0x00, 0x00, 0x00, 0x40, 0x54, 0x73, 0x46, 0x69, 0x6C, 0x65,
+        ];
+        let schema = TsFileSchemaBuilder::new()
+            .add(
+                "d1",
+                DeviceBuilder::new()
+                    .add(
+                        "s1",
+                        TSDataType::INT64,
+                        TSEncoding::TS2DIFF,
+                        CompressionType::UNCOMPRESSED,
+                    )
+                    .build(),
+            )
+            .build();
+
+        let buffer: Vec<u8> = Vec::new();
+
+        let mut writer = TsFileWriter::new_from_writer(schema, buffer, Default::default()).unwrap();
+
+        for i in 0..10 {
+            writer.write("d1", "s1", i, IoTDBValue::LONG(i))?;
+        }
+        writer.close();
+
+        assert_eq!(expected, writer.file_io_writer.out.as_slice());
+
+        Ok(())
+    }
+
+    #[test]
+    fn write_i32_ts2diff() -> Result<(), TsFileError> {
+        let expected = [
+            0x54, 0x73, 0x46, 0x69, 0x6C, 0x65, 0x03, 0x00, 0x04, 0x64, 0x31, 0x05, 0x04, 0x73,
+            0x31, 0x2B, 0x01, 0x00, 0x04, 0x29, 0x29, 0x18, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x04, 0x73, 0x31, 0x01, 0x08, 0x0A,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2D, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x01, 0x04, 0x73, 0x31, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x03, 0x01,
+            0x04, 0x64, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x8B, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3E,
+            0x1F, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x02, 0x80, 0x02, 0x05, 0x00, 0x00, 0x00, 0x40, 0x54, 0x73, 0x46,
+            0x69, 0x6C, 0x65,
+        ];
+        let schema = TsFileSchemaBuilder::new()
+            .add(
+                "d1",
+                DeviceBuilder::new()
+                    .add(
+                        "s1",
+                        TSDataType::INT32,
+                        TSEncoding::TS2DIFF,
+                        CompressionType::UNCOMPRESSED,
+                    )
+                    .build(),
+            )
+            .build();
+
+        let buffer: Vec<u8> = Vec::new();
+
+        let mut writer = TsFileWriter::new_from_writer(schema, buffer, Default::default()).unwrap();
+
+        for i in 0..10 {
+            writer.write("d1", "s1", i, IoTDBValue::INT(i as i32))?;
+        }
+        writer.close();
+
+        assert_eq!(expected, writer.file_io_writer.out.as_slice());
+
+        Ok(())
     }
 
     #[test]
@@ -1638,15 +1706,9 @@ mod tests {
             )
             .build();
 
-        let mut buffer: Vec<u8> = Vec::new();
+        let buffer: Vec<u8> = Vec::new();
 
-        let mut writer = TsFileWriter::new_from_writer(
-            "target/write_long.tsfile",
-            schema,
-            buffer,
-            Default::default(),
-        )
-        .unwrap();
+        let mut writer = TsFileWriter::new_from_writer(schema, buffer, Default::default()).unwrap();
 
         writer.write("d1", "s1", 1, IoTDBValue::LONG(13));
         writer.write("d1", "s2", 1, IoTDBValue::FLOAT(14.0));
@@ -1654,6 +1716,25 @@ mod tests {
         writer.close();
 
         assert_eq!(expected, writer.file_io_writer.out.as_slice());
+    }
+
+    #[test]
+    fn use_ts2diff() -> Result<(), TsFileError> {
+        let schema = Schema::simple(
+            "d1",
+            "s1",
+            TSDataType::INT64,
+            TSEncoding::TS2DIFF,
+            CompressionType::UNCOMPRESSED,
+        );
+
+        let mut writer = TsFileWriter::new("target/test.tsfile", schema, Default::default())?;
+
+        writer.write("d1", "s1", 1, IoTDBValue::LONG(1))?;
+
+        writer.close();
+
+        Ok(())
     }
 }
 

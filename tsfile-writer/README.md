@@ -78,8 +78,8 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 
 ### Encodings
 
-* [x] Timeseries Encoding
 * [x] Plain
+* [x] TS2Diff Encoding for INT32 and INT64
 * [ ] everything else...
 
 ### Datatypes
@@ -96,6 +96,10 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 * [ ] everything else...
 
 ## Changelog
+
+### 0.1.3
+
+- TS2Diff is now available for INT64 and INT32
 
 ### 0.1.2
 

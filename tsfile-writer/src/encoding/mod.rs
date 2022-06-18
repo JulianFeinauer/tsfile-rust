@@ -4,17 +4,19 @@ pub mod plain;
 pub mod time_encoder;
 
 use crate::encoding::plain::PlainEncoder;
-pub use time_encoder::TimeEncoder;
+use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
     PLAIN,
+    TS2DIFF,
 }
 
 impl TSEncoding {
     pub fn serialize(&self) -> u8 {
         match self {
             TSEncoding::PLAIN => 0,
+            TSEncoding::TS2DIFF => 4,
         }
     }
 }
@@ -28,9 +30,15 @@ pub trait Encoder {
 }
 
 impl dyn Encoder {
-    pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Box<dyn Encoder> {
-        match encoding {
-            TSEncoding::PLAIN => Box::new(PlainEncoder::new(data_type)),
+    pub(crate) fn new(
+        data_type: TSDataType,
+        encoding: TSEncoding,
+    ) -> Result<Box<dyn Encoder>, TsFileError> {
+        match (data_type, encoding) {
+            (_, TSEncoding::PLAIN) => Ok(Box::new(PlainEncoder::new(data_type))),
+            (TSDataType::INT64, TSEncoding::TS2DIFF) => Ok(Box::new(LongTs2DiffEncoder::new())),
+            (TSDataType::INT32, TSEncoding::TS2DIFF) => Ok(Box::new(IntTs2DiffEncoder::new())),
+            (_, TSEncoding::TS2DIFF) => Err(TsFileError::Encoding),
         }
     }
 }

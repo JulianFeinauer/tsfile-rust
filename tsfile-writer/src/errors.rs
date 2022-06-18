@@ -8,6 +8,8 @@ pub enum TsFileError {
     OutOfOrderData,
     IllegalState { source: Option<String> },
     Compression,
+    WrongTypeForSeries,
+    Encoding,
 }
 
 impl PartialEq for TsFileError {
@@ -25,6 +27,8 @@ impl PartialEq for TsFileError {
                 _ => false,
             },
             TsFileError::Compression => matches!(other, TsFileError::Compression),
+            TsFileError::WrongTypeForSeries => matches!(other, TsFileError::WrongTypeForSeries),
+            TsFileError::Encoding => matches!(other, TsFileError::Encoding),
         }
     }
 }
