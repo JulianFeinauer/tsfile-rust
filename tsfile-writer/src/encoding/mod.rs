@@ -2,12 +2,9 @@ use crate::{IoTDBValue, TSDataType, TsFileError};
 
 pub mod plain;
 pub mod time_encoder;
-mod ts2diff;
-mod time_encoder3;
 
 use crate::encoding::plain::PlainEncoder;
-pub use time_encoder::Ts2DiffEncoder;
-use crate::encoding::ts2diff::Ts2DiffEncoder2;
+use crate::encoding::time_encoder::LongTs2DiffEncoder;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
@@ -34,9 +31,11 @@ pub trait Encoder {
 
 impl dyn Encoder {
     pub(crate) fn new(data_type: TSDataType, encoding: TSEncoding) -> Result<Box<dyn Encoder>, TsFileError> {
-        Ok(match encoding {
-            TSEncoding::PLAIN => Box::new(PlainEncoder::new(data_type)),
-            TSEncoding::TS2DIFF => ts2diff::new(data_type)?,
-        })
+        match (data_type, encoding) {
+            (_, TSEncoding::PLAIN) => Ok(Box::new(PlainEncoder::new(data_type))),
+            (TSDataType::INT64, TSEncoding::TS2DIFF) => Ok(Box::new(LongTs2DiffEncoder::new())),
+            // (TSDataType::INT64, TSEncoding::TS2DIFF) => Ok(ts2diff::new(data_type)?),
+            (_, TSEncoding::TS2DIFF) => Err(TsFileError::Encoding),
+        }
     }
 }

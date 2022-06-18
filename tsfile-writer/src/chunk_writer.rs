@@ -1,5 +1,4 @@
 use crate::encoding::Encoder;
-use crate::encoding::Ts2DiffEncoder;
 use crate::statistics::Statistics;
 use crate::tsfile_io_writer::TsFileIoWriter;
 use crate::utils::{size_var_i32, size_var_u32};
@@ -11,6 +10,7 @@ use snap::raw::max_compress_len;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
+use crate::encoding::time_encoder::LongTs2DiffEncoder;
 
 const MAX_NUMBER_OF_POINTS_IN_PAGE: u32 = 1048576;
 const VALUE_COUNT_IN_ONE_PAGE_FOR_NEXT_CHECK: u32 = 7989;
@@ -18,7 +18,7 @@ const PAGE_SIZE_THRESHOLD: u32 = 65536;
 const MINIMUM_RECORD_COUNT_FOR_CHECK: u32 = 1500;
 
 struct PageWriter {
-    time_encoder: Ts2DiffEncoder,
+    time_encoder: LongTs2DiffEncoder,
     value_encoder: Box<dyn Encoder>,
     data_type: TSDataType,
     statistics: Statistics,
@@ -30,7 +30,7 @@ struct PageWriter {
 impl PageWriter {
     fn new(data_type: TSDataType, encoding: TSEncoding) -> Result<PageWriter, TsFileError> {
         Ok(PageWriter {
-            time_encoder: Ts2DiffEncoder::new(),
+            time_encoder: LongTs2DiffEncoder::new(),
             value_encoder: <dyn Encoder>::new(data_type, encoding)?,
             data_type,
             statistics: Statistics::new(data_type),
