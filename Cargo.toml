@@ -2,6 +2,7 @@
 
 members = [
     "tsfile-writer",
+    "tsfile-writer-c",
     "sync-sender",
     "examples"
 ]

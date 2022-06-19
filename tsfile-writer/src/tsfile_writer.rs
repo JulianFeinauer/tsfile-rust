@@ -230,6 +230,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             .measurement_groups
             .into_iter()
             .map(|(path, v)| {
+                println!("Path: {}", path);
                 (
                     path.borrow(),
                     GroupWriter {

@@ -118,6 +118,27 @@ impl TSDataType {
     }
 }
 
+impl TryFrom<u8> for TSDataType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => {
+                Ok(TSDataType::INT32)
+            }
+            2 => {
+                Ok(TSDataType::INT64)
+            }
+            3 => {
+                Ok(TSDataType::FLOAT)
+            }
+            _ => {
+                return Err(())
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct MeasurementSchema {
     data_type: TSDataType,
@@ -172,6 +193,16 @@ pub struct Schema<'a> {
     measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
 }
 
+impl<'a> Display for Schema<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut devices = vec![];
+        for (device_id, groups) in &self.measurement_groups {
+            devices.push(device_id);
+        }
+        write!(f, "{:?}", devices)
+    }
+}
+
 impl<'a> Schema<'a> {
     pub fn simple(
         device_id: &'a str,
@@ -180,6 +211,7 @@ impl<'a> Schema<'a> {
         encoding: TSEncoding,
         compression: CompressionType,
     ) -> Schema<'a> {
+        println!("Simple Schema with {} - {}", device_id, measurement_id);
         TsFileSchemaBuilder::new()
             .add(
                 device_id,
@@ -645,7 +677,7 @@ impl BloomFilter {
         }
 
         // Remove all trailing zero-bytes
-        while *result.last().unwrap() == 0x00 {
+        while result.last().is_some() && *result.last().unwrap() == 0x00 {
             result.remove(result.len() - 1);
         }
 
