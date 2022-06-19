@@ -5,17 +5,17 @@ use crate::tsfile_writer::DataPoint;
 use crate::{IoTDBValue, PositionedWrite};
 use std::collections::BTreeMap;
 
-pub struct GroupWriter<'a> {
-    pub(crate) path: &'a str,
-    pub(crate) chunk_writers: BTreeMap<&'a str, ChunkWriter>,
-    pub(crate) last_time_map: BTreeMap<&'a str, i64>,
+pub struct GroupWriter {
+    pub(crate) path: String,
+    pub(crate) chunk_writers: BTreeMap<String, ChunkWriter>,
+    pub(crate) last_time_map: BTreeMap<String, i64>,
 }
 
-impl<'a> GroupWriter<'a> {
+impl GroupWriter {
     pub(crate) fn write_many(
         &mut self,
         timestamp: i64,
-        values: Vec<DataPoint<'a>>,
+        values: Vec<DataPoint>,
     ) -> Result<u32, TsFileError> {
         let mut records = 0;
         for dp in values {
@@ -25,13 +25,13 @@ impl<'a> GroupWriter<'a> {
     }
 }
 
-impl<'a> GroupWriter<'a> {
-    pub(crate) fn get_last_time_map(&mut self) -> BTreeMap<&'a str, i64> {
+impl GroupWriter {
+    pub(crate) fn get_last_time_map(&mut self) -> BTreeMap<String, i64> {
         self.last_time_map.clone()
     }
 }
 
-impl<'a> GroupWriter<'a> {
+impl GroupWriter {
     pub(crate) fn flush_to_filewriter<T: PositionedWrite>(
         &mut self,
         file_writer: &mut TsFileIoWriter<T>,
@@ -81,17 +81,17 @@ impl<'a> GroupWriter<'a> {
     }
 }
 
-impl<'a> GroupWriter<'a> {
+impl GroupWriter {
     pub(crate) fn write(
         &mut self,
-        measurement_id: &'a str,
+        measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<u32, TsFileError> {
         // Check is historic
-        self.check_is_history_data(measurement_id, timestamp)?;
+        self.check_is_history_data(&measurement_id, timestamp)?;
 
-        let record_count = match &mut self.chunk_writers.get_mut(measurement_id) {
+        let record_count = match &mut self.chunk_writers.get_mut(measurement_id.as_str()) {
             Some(chunk_writer) => chunk_writer.write(timestamp, value).unwrap(),
             None => {
                 return Err(TsFileError::IllegalState {
@@ -105,11 +105,11 @@ impl<'a> GroupWriter<'a> {
 
     fn check_is_history_data(
         &mut self,
-        measurement_id: &'a str,
+        measurement_id: &String,
         timestamp: i64,
     ) -> Result<(), TsFileError> {
         if !self.last_time_map.contains_key(measurement_id) {
-            self.last_time_map.insert(measurement_id, -1);
+            self.last_time_map.insert(measurement_id.clone(), -1);
         }
         if timestamp <= *self.last_time_map.get(measurement_id).unwrap() {
             return Err(TsFileError::OutOfOrderData);

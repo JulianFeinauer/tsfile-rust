@@ -12,13 +12,13 @@ use std::fs::{create_dir_all, File};
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
-pub struct DataPoint<'a> {
-    pub(crate) measurement_id: &'a str,
+pub struct DataPoint {
+    pub(crate) measurement_id: String,
     pub(crate) value: IoTDBValue,
 }
 
-impl<'a> DataPoint<'a> {
-    pub fn new(measurement_id: &'a str, value: IoTDBValue) -> DataPoint<'a> {
+impl DataPoint {
+    pub fn new(measurement_id: String, value: IoTDBValue) -> DataPoint {
         Self {
             measurement_id,
             value,
@@ -26,24 +26,24 @@ impl<'a> DataPoint<'a> {
     }
 }
 
-pub struct TsFileWriter<'a, T: PositionedWrite> {
+pub struct TsFileWriter<T: PositionedWrite> {
     #[allow(dead_code)]
     filename: String,
-    pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
-    group_writers: BTreeMap<&'a str, GroupWriter<'a>>,
+    pub(crate) file_io_writer: TsFileIoWriter<T>,
+    group_writers: BTreeMap<String, GroupWriter>,
     #[allow(dead_code)]
     chunk_group_metadata: Vec<ChunkGroupMetadata>,
     #[allow(dead_code)]
     timeseries_metadata_map: HashMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
     record_count: u32,
     record_count_for_next_mem_check: u32,
-    non_aligned_timeseries_last_time_map: BTreeMap<&'a str, BTreeMap<&'a str, i64>>,
-    pub schema: Schema<'a>,
+    non_aligned_timeseries_last_time_map: BTreeMap<String, BTreeMap<String, i64>>,
+    pub schema: Schema,
     #[allow(dead_code)]
     config: TsFileConfig,
 }
 
-impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
+impl<T: PositionedWrite> TsFileWriter<T> {
     pub fn close(&mut self) {
         log::info!("start close file");
         self.flush_all_chunk_groups();
@@ -51,15 +51,15 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
     }
 }
 
-impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
+impl<T: PositionedWrite> TsFileWriter<T> {
     pub fn write(
         &mut self,
-        device: &'a str,
-        measurement_id: &'a str,
+        device: String,
+        measurement_id: String,
         timestamp: i64,
         value: IoTDBValue,
     ) -> Result<(), TsFileError> {
-        match self.group_writers.get_mut(device) {
+        match self.group_writers.get_mut(device.as_str()) {
             Some(group) => {
                 let records_written = group.write(measurement_id, timestamp, value)?;
                 self.record_count += records_written;
@@ -76,11 +76,11 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
     pub fn write_many(
         &mut self,
-        device: &'a str,
+        device: String,
         timestamp: i64,
-        values: Vec<DataPoint<'a>>,
+        values: Vec<DataPoint>,
     ) -> Result<(), TsFileError> {
-        match self.group_writers.get_mut(device) {
+        match self.group_writers.get_mut(&device) {
             Some(group) => {
                 let records_written = group.write_many(timestamp, values)?;
                 self.record_count += records_written;
@@ -126,10 +126,10 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 
     fn flush_all_chunk_groups(&mut self) -> Result<bool, TsFileError> {
         if self.record_count > 0 {
-            for (&device_id, group_writer) in self.group_writers.iter_mut() {
+            for (device_id, group_writer) in self.group_writers.iter_mut() {
                 // self.file_writer.start_chunk_group(device_id);
                 // self.file_writer
-                self.file_io_writer.start_chunk_group(device_id)?;
+                self.file_io_writer.start_chunk_group(&device_id)?;
                 let pos = self.file_io_writer.out.get_position();
                 let data_size = group_writer.flush_to_filewriter(&mut self.file_io_writer);
 
@@ -142,7 +142,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
                 self.file_io_writer.end_chunk_group();
 
                 self.non_aligned_timeseries_last_time_map
-                    .insert(device_id, group_writer.get_last_time_map());
+                    .insert(device_id.clone(), group_writer.get_last_time_map());
             }
             self.reset();
         }
@@ -171,17 +171,17 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             .into_iter()
             .map(|(path, v)| {
                 (
-                    path,
+                    path.clone(),
                     GroupWriter {
                         path,
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
-                            .map(|(&measurement_id, measurement_schema)| {
+                            .map(|(measurement_id, measurement_schema)| {
                                 (
-                                    measurement_id,
+                                    measurement_id.clone(),
                                     ChunkWriter::new(
-                                        measurement_id,
+                                        measurement_id.clone(),
                                         measurement_schema.data_type,
                                         measurement_schema.compression,
                                         measurement_schema.encoding,
@@ -197,15 +197,15 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
     }
 }
 
-impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
+impl TsFileWriter<WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
     pub fn new(
-        filename: &'a str,
-        schema: Schema<'a>,
+        filename: String,
+        schema: Schema,
         config: TsFileConfig,
-    ) -> Result<TsFileWriter<'a, WriteWrapper<File>>, TsFileError> {
+    ) -> Result<TsFileWriter<WriteWrapper<File>>, TsFileError> {
         // Create directory, if not exists
-        let folder = match std::path::Path::new(filename).parent() {
+        let folder = match std::path::Path::new(&filename).parent() {
             Some(f) => f,
             None => {
                 return Err(TsFileError::Error { source: None });
@@ -219,12 +219,12 @@ impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     }
 }
 
-impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
+impl<T: PositionedWrite> TsFileWriter<T> {
     pub(crate) fn new_from_writer(
-        schema: Schema<'a>,
+        schema: Schema,
         file_writer: T,
         config: TsFileConfig,
-    ) -> Result<TsFileWriter<'a, T>, TsFileError> {
+    ) -> Result<TsFileWriter<T>, TsFileError> {
         let group_writers = schema
             .clone()
             .measurement_groups
@@ -232,17 +232,17 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
             .map(|(path, v)| {
                 println!("Path: {}", path);
                 (
-                    path.borrow(),
+                    path.clone(),
                     GroupWriter {
                         path,
                         chunk_writers: v
                             .measurement_schemas
                             .iter()
-                            .map(|(&measurement_id, measurement_schema)| {
+                            .map(|(measurement_id, measurement_schema)| {
                                 (
-                                    measurement_id,
+                                    measurement_id.clone(),
                                     ChunkWriter::new(
-                                        measurement_id,
+                                        measurement_id.clone(),
                                         measurement_schema.data_type,
                                         measurement_schema.compression,
                                         measurement_schema.encoding,

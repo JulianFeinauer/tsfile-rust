@@ -184,34 +184,23 @@ impl MeasurementSchema {
 }
 
 #[derive(Clone)]
-pub struct MeasurementGroup<'a> {
-    measurement_schemas: HashMap<&'a str, MeasurementSchema>,
+pub struct MeasurementGroup {
+    measurement_schemas: HashMap<String, MeasurementSchema>,
 }
 
 #[derive(Clone)]
-pub struct Schema<'a> {
-    measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
+pub struct Schema {
+    measurement_groups: HashMap<String, MeasurementGroup>,
 }
 
-impl<'a> Display for Schema<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut devices = vec![];
-        for (device_id, groups) in &self.measurement_groups {
-            devices.push(device_id);
-        }
-        write!(f, "{:?}", devices)
-    }
-}
-
-impl<'a> Schema<'a> {
+impl Schema {
     pub fn simple(
-        device_id: &'a str,
-        measurement_id: &'a str,
+        device_id: String,
+        measurement_id: String,
         data_type: TSDataType,
         encoding: TSEncoding,
         compression: CompressionType,
-    ) -> Schema<'a> {
-        println!("Simple Schema with {} - {}", device_id, measurement_id);
+    ) -> Schema {
         TsFileSchemaBuilder::new()
             .add(
                 device_id,
@@ -799,23 +788,23 @@ pub fn write_file_3() {
     );
 
     let mut measurement_schema_map = HashMap::new();
-    measurement_schema_map.insert("s1", measurement_schema);
+    measurement_schema_map.insert("s1".to_owned(), measurement_schema);
     let measurement_group = MeasurementGroup {
         measurement_schemas: measurement_schema_map,
     };
     let mut measurement_groups_map = HashMap::new();
-    let d1 = "d1";
+    let d1 = "d1".to_owned();
     measurement_groups_map.insert(d1, measurement_group);
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
-    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default()).unwrap();
+    let mut writer = TsFileWriter::new("target/data3.tsfile".to_owned(), schema, Default::default()).unwrap();
 
-    TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
-    TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
-    TsFileWriter::write(&mut writer, "d1", "s1", 100, IoTDBValue::INT(15));
-    TsFileWriter::write(&mut writer, "d1", "s1", 1000, IoTDBValue::INT(16));
-    TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
+    TsFileWriter::write(&mut writer, "d1".to_owned(), "s1".to_owned(), 1, IoTDBValue::INT(13));
+    TsFileWriter::write(&mut writer, "d1".to_owned(), "s1".to_owned(), 10, IoTDBValue::INT(14));
+    TsFileWriter::write(&mut writer, "d1".to_owned(), "s1".to_owned(), 100, IoTDBValue::INT(15));
+    TsFileWriter::write(&mut writer, "d1".to_owned(), "s1".to_owned(), 1000, IoTDBValue::INT(16));
+    TsFileWriter::write(&mut writer, "d1".to_owned(), "s1".to_owned(), 10000, IoTDBValue::INT(17));
 }
 
 #[cfg(test)]

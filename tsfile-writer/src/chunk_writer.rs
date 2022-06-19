@@ -96,7 +96,7 @@ pub struct ChunkWriter {
 
 impl ChunkWriter {
     pub fn new(
-        measurement_id: &str,
+        measurement_id: String,
         data_type: TSDataType,
         compression_type: CompressionType,
         encoding: TSEncoding,

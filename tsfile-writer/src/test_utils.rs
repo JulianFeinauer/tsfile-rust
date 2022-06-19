@@ -24,12 +24,13 @@ pub fn validate_output(filename: &str, expected_structure: &str) {
     assert_eq!(expected_structure, real)
 }
 
-pub fn write_ts_file<'a, F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>)>(
-    filename: &'a str,
-    schema: Schema<'a>,
+pub fn write_ts_file<F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>)>(
+    filename: &str,
+    schema: Schema,
     test_code: F,
 ) -> Result<(), TsFileError> {
-    let mut writer = TsFileWriter::new(filename, schema, Default::default())?;
+    let filename = filename.to_owned();
+    let mut writer = TsFileWriter::new(filename.to_string(), schema, Default::default())?;
 
     // Execute the test
     test_code(&mut writer);

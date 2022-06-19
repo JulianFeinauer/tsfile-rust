@@ -7,17 +7,17 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-pub struct TsFileIoWriter<'a, T: PositionedWrite> {
+pub struct TsFileIoWriter<T: PositionedWrite> {
     config: TsFileConfig,
     pub(crate) out: T,
-    current_chunk_group_device_id: Option<&'a str>,
+    current_chunk_group_device_id: Option<String>,
     chunk_metadata_list: Vec<ChunkMetadata>,
     current_chunk_metadata: Option<ChunkMetadata>,
     chunk_group_metadata_list: Vec<ChunkGroupMetadata>,
     timeseries_metadata_map: BTreeMap<String, Vec<Box<dyn TimeSeriesMetadatable>>>,
 }
 
-impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
+impl<T: PositionedWrite> TsFileIoWriter<T> {
     pub(crate) fn end_current_chunk(&mut self) {
         match &self.current_chunk_metadata {
             None => {
@@ -31,7 +31,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     }
 }
 
-impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
+impl<T: PositionedWrite> TsFileIoWriter<T> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn start_flush_chunk(
         &mut self,
@@ -64,11 +64,11 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
     }
 }
 
-impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
+impl<T: PositionedWrite> TsFileIoWriter<T> {
     pub(crate) fn new(
         writer: T,
         config: TsFileConfig,
-    ) -> Result<TsFileIoWriter<'a, T>, TsFileError> {
+    ) -> Result<TsFileIoWriter<T>, TsFileError> {
         let mut io_writer = TsFileIoWriter {
             config,
             out: writer,
@@ -88,7 +88,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         Ok(())
     }
 
-    pub(crate) fn start_chunk_group(&mut self, device_id: &'a str) -> Result<(), TsFileError> {
+    pub(crate) fn start_chunk_group(&mut self, device_id: &String) -> Result<(), TsFileError> {
         log::info!(
             "Start chunk group:{}, file position {}",
             &device_id,
@@ -97,7 +97,7 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         let chunk_group_header = ChunkGroupHeader::new(device_id);
         chunk_group_header.serialize(&mut self.out)?;
 
-        self.current_chunk_group_device_id = Some(device_id);
+        self.current_chunk_group_device_id = Some(device_id.clone());
         self.chunk_metadata_list.clear();
         Ok(())
     }
@@ -116,7 +116,8 @@ impl<'a, T: PositionedWrite> TsFileIoWriter<'a, T> {
         if self.current_chunk_group_device_id == None || self.chunk_metadata_list.is_empty() {
             return;
         }
-        let device_id = self.current_chunk_group_device_id.unwrap();
+        let device_id = self.current_chunk_group_device_id.as_ref().unwrap().clone();
+
         // for chunk_metadata in &self.chunk_metadata_list {
         //     self.chunk_group_metadata_list.get_mut(device_id.as_str()).unwrap().push(
         //         chunk_metadata.clone()

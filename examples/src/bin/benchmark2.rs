@@ -12,16 +12,16 @@ fn main() {
 
     let schema = TsFileSchemaBuilder::new()
         .add(
-            "d1",
+            "d1".to_owned(),
             DeviceBuilder::new()
                 .add(
-                    "s1",
+                    "s1".to_owned(),
                     TSDataType::INT64,
                     TSEncoding::PLAIN,
                     CompressionType::SNAPPY,
                 )
                 .add(
-                    "s2",
+                    "s2".to_owned(),
                     TSDataType::FLOAT,
                     TSEncoding::PLAIN,
                     CompressionType::SNAPPY,
@@ -29,16 +29,16 @@ fn main() {
                 .build(),
         )
         .add(
-            "d2",
+            "d2".to_owned(),
             DeviceBuilder::new()
                 .add(
-                    "s1",
+                    "s1".to_owned(),
                     TSDataType::INT64,
                     TSEncoding::PLAIN,
                     CompressionType::SNAPPY,
                 )
                 .add(
-                    "s2",
+                    "s2".to_owned(),
                     TSDataType::FLOAT,
                     TSEncoding::PLAIN,
                     CompressionType::SNAPPY,
@@ -51,34 +51,36 @@ fn main() {
     for _ in 0..10 {
         let start = SystemTime::now();
         let mut writer = TsFileWriter::new(
-            "target/benchmark2.tsfile",
+            "target/benchmark2.tsfile".to_owned(),
             schema.clone(),
             Default::default(),
         )
         .unwrap();
         for i in 0..10000001 {
-            // writer.write("d1", "s1", i, IoTDBValue::LONG(i));
-            // writer.write("d1", "s2", i, IoTDBValue::FLOAT(i as f32));
+            let device_id = "d1".to_owned();
+            let measurement_id = "s1".to_owned();
+            writer.write(device_id.clone(), "s1".to_owned(), i, IoTDBValue::LONG(i));
+            writer.write(device_id, "s2".to_owned(), i, IoTDBValue::FLOAT(i as f32));
             // writer.write("d2", "s1", i, IoTDBValue::LONG(i));
             // writer.write("d2", "s2", i, IoTDBValue::FLOAT(i as f32));
 
+            // writer
+            //     .write_many(
+            //         "d1",
+            //         i,
+            //         vec![
+            //             DataPoint::new("s1", IoTDBValue::LONG(i)),
+            //             DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+            //         ],
+            //     )
+            //     .expect("");
             writer
                 .write_many(
-                    "d1",
+                    "d2".to_owned(),
                     i,
                     vec![
-                        DataPoint::new("s1", IoTDBValue::LONG(i)),
-                        DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
-                    ],
-                )
-                .expect("");
-            writer
-                .write_many(
-                    "d2",
-                    i,
-                    vec![
-                        DataPoint::new("s1", IoTDBValue::LONG(i)),
-                        DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+                        DataPoint::new("s1".to_owned(), IoTDBValue::LONG(i)),
+                        DataPoint::new("s2".to_owned(), IoTDBValue::FLOAT(i as f32)),
                     ],
                 )
                 .expect("");
