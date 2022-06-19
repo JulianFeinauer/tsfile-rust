@@ -211,7 +211,6 @@ impl<'a> Schema<'a> {
         encoding: TSEncoding,
         compression: CompressionType,
     ) -> Schema<'a> {
-        println!("Simple Schema with {} - {}", device_id, measurement_id);
         TsFileSchemaBuilder::new()
             .add(
                 device_id,

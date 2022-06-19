@@ -3,7 +3,7 @@ extern crate libc;
 
 use std::ffi::{CStr, CString};
 use std::fs::File;
-use libc::c_char;
+use libc::{c_char, proc_kmsgbuf};
 use tsfile_writer::{IoTDBValue, PositionedWrite, Schema, TSDataType, WriteWrapper};
 use tsfile_writer::tsfile_writer::TsFileWriter;
 
@@ -19,18 +19,16 @@ pub extern "C" fn schema_simple<'a>(device_id: *const c_char, measurement_id: *c
 
         CStr::from_ptr(measurement_id)
     };
-    let device_id = device_id.to_str().expect("Unable to parse Device ID");
-    let measurement_id = measurement_id.to_str().expect("Unable to parse Measurement ID");
+    let device_id = device_id.to_str().unwrap();
+    let measurement_id = measurement_id.to_str().unwrap();
+
     let data_type = data_type.try_into().expect("Unable to deserialize data type");
     let encoding = encoding.try_into().expect("Unable to deserialize encoding");
     let compression = compression.try_into().expect("Unable to deserialize compression");
 
-    println!("Constructing Schema {} - {} - {:?} - {:?} - {:?}", device_id, measurement_id, data_type, encoding, compression);
-
     let schema = Schema::simple(device_id, measurement_id, data_type, encoding, compression);
 
     let b = Box::new(schema);
-
 
     Box::into_raw(b)
 }
@@ -42,23 +40,23 @@ pub extern "C" fn schema_free(schema: *mut Schema) {
         let b = unsafe {
             Box::from_raw(schema)
         };
-        println!("Freeing schema {}", &b);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn file_writer_new<'a>(filename: *const c_char, schema: *mut Schema<'a>) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
-    println!("Hello world!");
     let filename = unsafe {
         assert!(!filename.is_null());
 
         CStr::from_ptr(filename)
     };
     let schema = unsafe {
-        *Box::from_raw(schema)
+        Box::from_raw(schema)
     };
-    println!("Generate File Writer {} with Schema {}", filename.to_str().expect(""), schema);
-    let b = Box::new(TsFileWriter::new(filename.to_str().expect(""), schema, Default::default()).expect(""));
+    let b = Box::new(TsFileWriter::new(filename.to_str().expect(""), *schema.clone(), Default::default()).expect(""));
+
+    // Important, forget about the pointer to not clean up schema here
+    Box::leak(schema);
 
     Box::into_raw(b)
 }
@@ -90,12 +88,10 @@ pub extern "C" fn file_writer_write_int32<'a>(writer: *mut TsFileWriter<'a, Writ
 
 #[no_mangle]
 pub extern "C" fn file_writer_close<'a>(writer: *mut TsFileWriter<'a, WriteWrapper<File>>) {
-    println!("Freeing writer...");
     if !writer.is_null() {
         let mut _b = unsafe {
             Box::from_raw(writer)
         };
-        println!("Closing writer");
         _b.close();
     }
 }
