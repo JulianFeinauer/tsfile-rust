@@ -97,6 +97,10 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 
 ## Changelog
 
+### 0.1.4 (not released)
+
+- TsFileWriter::write_many now accepts `IntoIterator<Item=DataPoint<'a>>` as argument instead of only `Vec<DataPoint<'a>>`
+
 ### 0.1.3
 
 - TS2Diff is now available for INT64 and INT32
