@@ -15,7 +15,7 @@ impl<'a> GroupWriter<'a> {
     pub(crate) fn write_many(
         &mut self,
         timestamp: i64,
-        values: Vec<DataPoint<'a>>,
+        values: impl IntoIterator<Item=DataPoint<'a>>,
     ) -> Result<u32, TsFileError> {
         let mut records = 0;
         for dp in values {

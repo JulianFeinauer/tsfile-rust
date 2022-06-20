@@ -78,7 +78,7 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
         &mut self,
         device: &'a str,
         timestamp: i64,
-        values: Vec<DataPoint<'a>>,
+        values: impl IntoIterator<Item=DataPoint<'a>>,
     ) -> Result<(), TsFileError> {
         match self.group_writers.get_mut(device) {
             Some(group) => {
