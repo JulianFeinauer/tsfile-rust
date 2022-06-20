@@ -1,12 +1,15 @@
 extern crate core;
 extern crate libc;
 
-use libc::{c_char, proc_kmsgbuf};
-use std::ffi::{CStr, CString};
+use libc::c_char;
+use std::ffi::CStr;
 use std::fs::File;
 use tsfile_writer::tsfile_writer::TsFileWriter;
-use tsfile_writer::{IoTDBValue, PositionedWrite, Schema, TSDataType, WriteWrapper};
+use tsfile_writer::{IoTDBValue, Schema, WriteWrapper};
 
+/// # Safety
+/// this function is intended for C usage, so unsafe is part of it....
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn schema_simple<'a>(
     device_id: *const c_char,
@@ -43,18 +46,24 @@ pub extern "C" fn schema_simple<'a>(
     Box::into_raw(b)
 }
 
+/// # Safety
+/// this function is intended for C usage, so unsafe is part of it....
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn schema_free(schema: *mut Schema) {
     if !schema.is_null() {
-        let b = unsafe { Box::from_raw(schema) };
+        let _b = unsafe { Box::from_raw(schema) };
     }
 }
 
+/// # Safety
+/// this function is intended for C usage, so unsafe is part of it....
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn file_writer_new<'a>(
+pub extern "C" fn file_writer_new(
     filename: *const c_char,
-    schema: *mut Schema<'a>,
-) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
+    schema: *mut Schema,
+) -> *mut TsFileWriter<WriteWrapper<File>> {
     let filename = unsafe {
         assert!(!filename.is_null());
 
@@ -76,14 +85,17 @@ pub extern "C" fn file_writer_new<'a>(
     Box::into_raw(b)
 }
 
+/// # Safety
+/// this function is intended for C usage, so unsafe is part of it....
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn file_writer_write_int32<'a>(
-    writer: *mut TsFileWriter<'a, WriteWrapper<File>>,
+pub extern "C" fn file_writer_write_int32(
+    writer: *mut TsFileWriter<WriteWrapper<File>>,
     device_id: *const c_char,
     measurement_id: *const c_char,
     timestamp: i64,
     number: i32,
-) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
+) -> *mut TsFileWriter<WriteWrapper<File>> {
     if writer.is_null() {
         panic!("Null writer given!")
     }
@@ -112,8 +124,11 @@ pub extern "C" fn file_writer_write_int32<'a>(
     Box::into_raw(writer)
 }
 
+/// # Safety
+/// this function is intended for C usage, so unsafe is part of it....
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn file_writer_close<'a>(writer: *mut TsFileWriter<'a, WriteWrapper<File>>) {
+pub extern "C" fn file_writer_close(writer: *mut TsFileWriter<WriteWrapper<File>>) {
     if !writer.is_null() {
         let mut _b = unsafe { Box::from_raw(writer) };
         _b.close();

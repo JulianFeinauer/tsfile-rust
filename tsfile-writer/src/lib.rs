@@ -126,7 +126,7 @@ impl TryFrom<u8> for TSDataType {
             1 => Ok(TSDataType::INT32),
             2 => Ok(TSDataType::INT64),
             3 => Ok(TSDataType::FLOAT),
-            _ => return Err(()),
+            _ => Err(()),
         }
     }
 }
@@ -188,7 +188,7 @@ pub struct Schema<'a> {
 impl<'a> Display for Schema<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut devices = vec![];
-        for (device_id, groups) in &self.measurement_groups {
+        for device_id in self.measurement_groups.keys() {
             devices.push(device_id);
         }
         write!(f, "{:?}", devices)

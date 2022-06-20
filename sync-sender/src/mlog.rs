@@ -128,7 +128,7 @@ impl MLog {
 
 #[cfg(test)]
 mod test {
-    use crate::{write_mlog, MLog};
+    use crate::MLog;
     use std::ops::Deref;
     use tsfile_writer::compression::CompressionType;
     use tsfile_writer::encoding::TSEncoding;
