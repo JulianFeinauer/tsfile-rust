@@ -28,7 +28,7 @@ impl<'a> DataPoint<'a> {
 
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     #[allow(dead_code)]
-    filename: String,
+    pub filename: String,
     pub(crate) file_io_writer: TsFileIoWriter<'a, T>,
     group_writers: BTreeMap<&'a str, GroupWriter<'a>>,
     #[allow(dead_code)]
@@ -200,12 +200,12 @@ impl<'a, T: PositionedWrite> TsFileWriter<'a, T> {
 impl<'a> TsFileWriter<'a, WriteWrapper<File>> {
     // "Default" constructor to use... writes to a file
     pub fn new(
-        filename: &'a str,
+        filename: String,
         schema: Schema<'a>,
         config: TsFileConfig,
     ) -> Result<TsFileWriter<'a, WriteWrapper<File>>, TsFileError> {
         // Create directory, if not exists
-        let folder = match std::path::Path::new(filename).parent() {
+        let folder = match std::path::Path::new(filename.as_str()).parent() {
             Some(f) => f,
             None => {
                 return Err(TsFileError::Error { source: None });

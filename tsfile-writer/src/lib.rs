@@ -132,10 +132,10 @@ impl TryFrom<u8> for TSDataType {
 }
 
 #[derive(Clone)]
-struct MeasurementSchema {
-    data_type: TSDataType,
-    encoding: TSEncoding,
-    compression: CompressionType,
+pub struct MeasurementSchema {
+    pub data_type: TSDataType,
+    pub encoding: TSEncoding,
+    pub compression: CompressionType,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -177,12 +177,12 @@ impl MeasurementSchema {
 
 #[derive(Clone)]
 pub struct MeasurementGroup<'a> {
-    measurement_schemas: HashMap<&'a str, MeasurementSchema>,
+    pub measurement_schemas: HashMap<&'a str, MeasurementSchema>,
 }
 
 #[derive(Clone)]
 pub struct Schema<'a> {
-    measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
+    pub measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
 }
 
 impl<'a> Display for Schema<'a> {
@@ -800,7 +800,7 @@ pub fn write_file_3() {
     let schema = Schema {
         measurement_groups: measurement_groups_map,
     };
-    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default()).unwrap();
+    let mut writer = TsFileWriter::new("target/data3.tsfile".to_string(), schema, Default::default()).unwrap();
 
     TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
     TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));

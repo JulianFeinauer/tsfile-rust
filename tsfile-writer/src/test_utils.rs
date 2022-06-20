@@ -29,7 +29,7 @@ pub fn write_ts_file<'a, F: FnOnce(&mut TsFileWriter<WriteWrapper<File>>)>(
     schema: Schema<'a>,
     test_code: F,
 ) -> Result<(), TsFileError> {
-    let mut writer = TsFileWriter::new(filename, schema, Default::default())?;
+    let mut writer = TsFileWriter::new(filename.to_string(), schema, Default::default())?;
 
     // Execute the test
     test_code(&mut writer);
