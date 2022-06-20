@@ -76,7 +76,7 @@ fn main() {
                 .write_many(
                     "d2",
                     i,
-                    vec![
+                    [
                         DataPoint::new("s1", IoTDBValue::LONG(i)),
                         DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
                     ],

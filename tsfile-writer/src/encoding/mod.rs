@@ -5,11 +5,24 @@ pub mod time_encoder;
 
 use crate::encoding::plain::PlainEncoder;
 use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
+use crate::TSEncoding::{PLAIN, TS2DIFF};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {
     PLAIN,
     TS2DIFF,
+}
+
+impl TryFrom<u8> for TSEncoding {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(PLAIN),
+            4 => Ok(TS2DIFF),
+            _ => Err(()),
+        }
+    }
 }
 
 impl TSEncoding {

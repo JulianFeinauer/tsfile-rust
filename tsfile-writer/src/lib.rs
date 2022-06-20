@@ -118,6 +118,19 @@ impl TSDataType {
     }
 }
 
+impl TryFrom<u8> for TSDataType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(TSDataType::INT32),
+            2 => Ok(TSDataType::INT64),
+            3 => Ok(TSDataType::FLOAT),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct MeasurementSchema {
     data_type: TSDataType,
@@ -170,6 +183,16 @@ pub struct MeasurementGroup<'a> {
 #[derive(Clone)]
 pub struct Schema<'a> {
     measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
+}
+
+impl<'a> Display for Schema<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut devices = vec![];
+        for device_id in self.measurement_groups.keys() {
+            devices.push(device_id);
+        }
+        write!(f, "{:?}", devices)
+    }
 }
 
 impl<'a> Schema<'a> {
@@ -645,7 +668,7 @@ impl BloomFilter {
         }
 
         // Remove all trailing zero-bytes
-        while *result.last().unwrap() == 0x00 {
+        while result.last().is_some() && *result.last().unwrap() == 0x00 {
             result.remove(result.len() - 1);
         }
 
