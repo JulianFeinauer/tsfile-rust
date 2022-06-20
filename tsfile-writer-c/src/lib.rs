@@ -1,14 +1,20 @@
 extern crate core;
 extern crate libc;
 
+use libc::{c_char, proc_kmsgbuf};
 use std::ffi::{CStr, CString};
 use std::fs::File;
-use libc::{c_char, proc_kmsgbuf};
-use tsfile_writer::{IoTDBValue, PositionedWrite, Schema, TSDataType, WriteWrapper};
 use tsfile_writer::tsfile_writer::TsFileWriter;
+use tsfile_writer::{IoTDBValue, PositionedWrite, Schema, TSDataType, WriteWrapper};
 
 #[no_mangle]
-pub extern "C" fn schema_simple<'a>(device_id: *const c_char, measurement_id: *const c_char, data_type: u8, encoding: u8, compression: u8) -> *mut Schema<'a> {
+pub extern "C" fn schema_simple<'a>(
+    device_id: *const c_char,
+    measurement_id: *const c_char,
+    data_type: u8,
+    encoding: u8,
+    compression: u8,
+) -> *mut Schema<'a> {
     let device_id = unsafe {
         assert!(!device_id.is_null());
 
@@ -22,9 +28,13 @@ pub extern "C" fn schema_simple<'a>(device_id: *const c_char, measurement_id: *c
     let device_id = device_id.to_str().unwrap();
     let measurement_id = measurement_id.to_str().unwrap();
 
-    let data_type = data_type.try_into().expect("Unable to deserialize data type");
+    let data_type = data_type
+        .try_into()
+        .expect("Unable to deserialize data type");
     let encoding = encoding.try_into().expect("Unable to deserialize encoding");
-    let compression = compression.try_into().expect("Unable to deserialize compression");
+    let compression = compression
+        .try_into()
+        .expect("Unable to deserialize compression");
 
     let schema = Schema::simple(device_id, measurement_id, data_type, encoding, compression);
 
@@ -33,27 +43,32 @@ pub extern "C" fn schema_simple<'a>(device_id: *const c_char, measurement_id: *c
     Box::into_raw(b)
 }
 
-
 #[no_mangle]
 pub extern "C" fn schema_free(schema: *mut Schema) {
     if !schema.is_null() {
-        let b = unsafe {
-            Box::from_raw(schema)
-        };
+        let b = unsafe { Box::from_raw(schema) };
     }
 }
 
 #[no_mangle]
-pub extern "C" fn file_writer_new<'a>(filename: *const c_char, schema: *mut Schema<'a>) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
+pub extern "C" fn file_writer_new<'a>(
+    filename: *const c_char,
+    schema: *mut Schema<'a>,
+) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
     let filename = unsafe {
         assert!(!filename.is_null());
 
         CStr::from_ptr(filename)
     };
-    let schema = unsafe {
-        Box::from_raw(schema)
-    };
-    let b = Box::new(TsFileWriter::new(filename.to_str().expect(""), *schema.clone(), Default::default()).expect(""));
+    let schema = unsafe { Box::from_raw(schema) };
+    let b = Box::new(
+        TsFileWriter::new(
+            filename.to_str().expect(""),
+            *schema.clone(),
+            Default::default(),
+        )
+        .expect(""),
+    );
 
     // Important, forget about the pointer to not clean up schema here
     Box::leak(schema);
@@ -62,7 +77,13 @@ pub extern "C" fn file_writer_new<'a>(filename: *const c_char, schema: *mut Sche
 }
 
 #[no_mangle]
-pub extern "C" fn file_writer_write_int32<'a>(writer: *mut TsFileWriter<'a, WriteWrapper<File>>, device_id: *const c_char, measurement_id: *const c_char, timestamp: i64, number: i32) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
+pub extern "C" fn file_writer_write_int32<'a>(
+    writer: *mut TsFileWriter<'a, WriteWrapper<File>>,
+    device_id: *const c_char,
+    measurement_id: *const c_char,
+    timestamp: i64,
+    number: i32,
+) -> *mut TsFileWriter<'a, WriteWrapper<File>> {
     if writer.is_null() {
         panic!("Null writer given!")
     }
@@ -76,11 +97,16 @@ pub extern "C" fn file_writer_write_int32<'a>(writer: *mut TsFileWriter<'a, Writ
 
         CStr::from_ptr(measurement_id)
     };
-    let mut writer = unsafe {
-        Box::from_raw(writer)
-    };
+    let mut writer = unsafe { Box::from_raw(writer) };
 
-    writer.write(device_id.to_str().unwrap(), measurement_id.to_str().unwrap(), timestamp, IoTDBValue::INT(number)).unwrap();
+    writer
+        .write(
+            device_id.to_str().unwrap(),
+            measurement_id.to_str().unwrap(),
+            timestamp,
+            IoTDBValue::INT(number),
+        )
+        .unwrap();
 
     // Return ref back
     Box::into_raw(writer)
@@ -89,9 +115,7 @@ pub extern "C" fn file_writer_write_int32<'a>(writer: *mut TsFileWriter<'a, Writ
 #[no_mangle]
 pub extern "C" fn file_writer_close<'a>(writer: *mut TsFileWriter<'a, WriteWrapper<File>>) {
     if !writer.is_null() {
-        let mut _b = unsafe {
-            Box::from_raw(writer)
-        };
+        let mut _b = unsafe { Box::from_raw(writer) };
         _b.close();
     }
 }

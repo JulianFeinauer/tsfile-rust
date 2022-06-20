@@ -123,18 +123,10 @@ impl TryFrom<u8> for TSDataType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1 => {
-                Ok(TSDataType::INT32)
-            }
-            2 => {
-                Ok(TSDataType::INT64)
-            }
-            3 => {
-                Ok(TSDataType::FLOAT)
-            }
-            _ => {
-                return Err(())
-            }
+            1 => Ok(TSDataType::INT32),
+            2 => Ok(TSDataType::INT64),
+            3 => Ok(TSDataType::FLOAT),
+            _ => return Err(()),
         }
     }
 }

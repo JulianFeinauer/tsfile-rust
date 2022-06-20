@@ -13,7 +13,7 @@ impl TryFrom<u8> for CompressionType {
         match value {
             0x00 => Ok(UNCOMPRESSED),
             0x01 => Ok(SNAPPY),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
