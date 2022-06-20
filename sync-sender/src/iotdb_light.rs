@@ -271,15 +271,24 @@ mod test {
     use tsfile_writer::compression::CompressionType;
     use tsfile_writer::encoding::TSEncoding;
     use tsfile_writer::{IoTDBValue, Schema, TSDataType};
-    use crate::iotdb_light::{IoTDBLight, IoTDBLightError};
+    use tsfile_writer::ts_file_config::TsFileConfig;
+    use crate::iotdb_light::{IoTDBLight, IoTDBLightConfig, IoTDBLightError};
 
     #[test]
     fn init_server() -> Result<(), IoTDBLightError> {
         let schema = Schema::simple("d1", "s1", TSDataType::INT32, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
-        let mut iotdb = IoTDBLight::new("/tmp/server1/", schema, Default::default());
+        let config = IoTDBLightConfig {
+            storage_group: "sg".to_string(),
+            remote_address: "127.0.0.1:5555".to_string()
+        };
+        let mut iotdb = IoTDBLight::new("/tmp/server1/", schema, config);
 
         // Do something?
         iotdb.write("d1", "s1", 1, IoTDBValue::INT(15))?;
+
+        iotdb.sync();
+
+        iotdb.write("d1", "s1", 2, IoTDBValue::INT(16))?;
 
         iotdb.sync();
 
