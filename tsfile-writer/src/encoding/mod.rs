@@ -20,7 +20,7 @@ impl TryFrom<u8> for TSEncoding {
         match value {
             0 => Ok(PLAIN),
             4 => Ok(TS2DIFF),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
