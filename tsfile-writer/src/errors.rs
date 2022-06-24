@@ -1,3 +1,4 @@
+//! Default Errors for the TsFile crate
 use std::io::Error;
 
 #[derive(Debug)]

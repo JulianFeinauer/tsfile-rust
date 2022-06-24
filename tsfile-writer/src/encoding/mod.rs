@@ -1,3 +1,4 @@
+//! Different Encoding Algorithms for TsFiles
 use crate::{IoTDBValue, TSDataType, TsFileError};
 
 pub mod plain;

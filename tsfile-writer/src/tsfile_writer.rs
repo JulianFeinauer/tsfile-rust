@@ -1,3 +1,4 @@
+//! Contains the TsFileWriter as central class to write tsfiles
 use crate::chunk_writer::ChunkWriter;
 use crate::errors::TsFileError;
 use crate::group_writer::GroupWriter;
@@ -12,6 +13,8 @@ use std::fs::{create_dir_all, File};
 
 const CHUNK_GROUP_SIZE_THRESHOLD_BYTE: u32 = 128 * 1024 * 1024;
 
+/// Class defined to hold a datapoint for writing into a given device.
+/// Consists of a measurement_id and a value
 pub struct DataPoint<'a> {
     pub(crate) measurement_id: &'a str,
     pub(crate) value: IoTDBValue,
@@ -26,6 +29,10 @@ impl<'a> DataPoint<'a> {
     }
 }
 
+/// Central class to write TsFiles
+/// a TsFileWriter always produces one file.
+/// The file is opened on creation of the TsFileWriter and finished on closing.
+/// It is not possible to append to files, always a new file has to be started.
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     #[allow(dead_code)]
     filename: String,

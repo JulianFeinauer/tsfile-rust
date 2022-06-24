@@ -1,3 +1,4 @@
+//! Contains the compression algorithms
 use crate::CompressionType::{SNAPPY, UNCOMPRESSED};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
