@@ -117,7 +117,6 @@ impl StatisticsStruct<f32, f64> {
     }
 }
 
-#[macro_export]
 macro_rules! implement_statistics {
     ( $type:ty, $sum:ty ) => {
         impl StatisticsStruct<$type, $sum> {

@@ -782,7 +782,7 @@ fn write_str(file: &mut dyn PositionedWrite, s: &str) -> Result<(), TsFileError>
 // }
 
 #[warn(dead_code)]
-pub fn write_file_3() {
+fn write_file_3() {
     let measurement_schema = MeasurementSchema::new(
         TSDataType::INT32,
         TSEncoding::PLAIN,

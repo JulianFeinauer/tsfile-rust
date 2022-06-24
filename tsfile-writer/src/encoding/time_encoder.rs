@@ -25,7 +25,6 @@ impl TryFrom<&IoTDBValue> for i32 {
     }
 }
 
-#[macro_export]
 macro_rules! ts2diff_encoder {
     ( $name:ident, $type:ty, $num_bits:expr ) => {
         pub struct $name {
