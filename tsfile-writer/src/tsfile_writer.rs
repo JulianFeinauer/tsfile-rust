@@ -33,6 +33,60 @@ impl<'a> DataPoint<'a> {
 /// a TsFileWriter always produces one file.
 /// The file is opened on creation of the TsFileWriter and finished on closing.
 /// It is not possible to append to files, always a new file has to be started.
+///
+/// # Example Usage
+/// ```
+/// let schema = TsFileSchemaBuilder::new()
+///         .add(
+///             "d1",
+///             DeviceBuilder::new()
+///                 .add(
+///                     "s1",
+///                     TSDataType::INT64,
+///                     TSEncoding::PLAIN,
+///                     CompressionType::UNCOMPRESSED,
+///                 )
+///                 .add(
+///                     "s2",
+///                     TSDataType::FLOAT,
+///                     TSEncoding::PLAIN,
+///                     CompressionType::UNCOMPRESSED,
+///                 )
+///                 .build(),
+///         )
+///         .add(
+///             "d2",
+///             DeviceBuilder::new()
+///                 .add(
+///                     "s1",
+///                     TSDataType::INT64,
+///                     TSEncoding::PLAIN,
+///                     CompressionType::UNCOMPRESSED,
+///                 )
+///                 .add(
+///                     "s2",
+///                     TSDataType::FLOAT,
+///                     TSEncoding::PLAIN,
+///                     CompressionType::UNCOMPRESSED,
+///                 )
+///                 .build(),
+///         )
+///         .build();
+///
+/// // Create the writer
+/// let mut writer = TsFileWriter::new(
+///     "target/benchmark2.tsfile",
+///     schema,
+///     Default::default(),
+/// )
+/// .unwrap();
+///
+/// // Write multiple timeseries at once
+/// writer.write_many("d1",1, vec![
+///         DataPoint::new("s1", IoTDBValue::LONG(i)),
+///         DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+/// ]);
+/// ```
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     #[allow(dead_code)]
     filename: String,
