@@ -34,7 +34,7 @@ impl PartialEq for TsFileError {
     }
 }
 
-impl<'a> From<std::io::Error> for TsFileError {
+impl From<std::io::Error> for TsFileError {
     fn from(e: Error) -> Self {
         TsFileError::IoError { source: e }
     }
