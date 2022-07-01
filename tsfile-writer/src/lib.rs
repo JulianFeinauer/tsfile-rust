@@ -75,6 +75,7 @@
 extern crate core;
 
 use std::cmp::Ordering;
+use std::collections::hash_map::IntoIter;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
@@ -105,7 +106,6 @@ use crate::murmur128::Murmur128;
 use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
 use crate::statistics::Statistics;
 use crate::ts_file_config::TsFileConfig;
-use crate::tsfile_writer::TsFileWriter;
 use crate::utils::{write_var_i32, write_var_u32};
 use crate::MetadataIndexNodeType::LeafDevice;
 
@@ -205,10 +205,10 @@ impl TryFrom<u8> for TSDataType {
 }
 
 #[derive(Clone)]
-struct MeasurementSchema {
-    data_type: TSDataType,
-    encoding: TSEncoding,
-    compression: CompressionType,
+pub struct MeasurementSchema {
+    pub data_type: TSDataType,
+    pub encoding: TSEncoding,
+    pub compression: CompressionType,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -235,6 +235,7 @@ impl PartialOrd<Self> for Path {
 }
 
 impl MeasurementSchema {
+    #[allow(dead_code)]
     fn new(
         data_type: TSDataType,
         encoding: TSEncoding,
@@ -253,9 +254,21 @@ pub struct MeasurementGroup<'a> {
     measurement_schemas: HashMap<&'a str, MeasurementSchema>,
 }
 
+impl<'a> MeasurementGroup<'a> {
+    pub fn get_timeseries(&self) -> IntoIter<&'a str, MeasurementSchema> {
+        self.measurement_schemas.clone().into_iter()
+    }
+}
+
 #[derive(Clone)]
 pub struct Schema<'a> {
     measurement_groups: HashMap<&'a str, MeasurementGroup<'a>>,
+}
+
+impl<'a> Schema<'a> {
+    pub fn get_devices(&self) -> IntoIter<&'a str, MeasurementGroup<'a>> {
+        self.measurement_groups.clone().into_iter()
+    }
 }
 
 impl<'a> Display for Schema<'a> {
@@ -833,53 +846,6 @@ fn write_str(file: &mut dyn PositionedWrite, s: &str) -> Result<(), TsFileError>
     let bytes = s.as_bytes();
     file.write_all(bytes)?; // measurement id
     Ok(())
-}
-
-// TODO delete asap
-// impl Serializable for ChunkHeader<'_> {
-//     fn serialize(&self, file: &mut dyn PositionedWrite) -> io::Result<()> {
-//         // Chunk Header
-//         // (byte)((numOfPages <= 1 ? MetaMarker.ONLY_ONE_PAGE_CHUNK_HEADER : MetaMarker.CHUNK_HEADER) | (byte) mask),
-//         file.write(&[5]).expect("write failed"); // Marker
-//         write_str(file, &self.measurement_id);
-//         // Data Lenght
-//         file.write(&[self.data_size]).expect("write failed");
-//         // Data Type INT32 -> 1
-//         file.write(&[1]).expect("write failed");
-//         // Compression Type UNCOMPRESSED -> 0
-//         file.write(&[0]).expect("write failed");
-//         // Encoding PLAIN -> 0
-//         file.write(&[0]).expect("write failed");
-//         Ok(())
-//     }
-// }
-
-#[warn(dead_code)]
-fn write_file_3() {
-    let measurement_schema = MeasurementSchema::new(
-        TSDataType::INT32,
-        TSEncoding::PLAIN,
-        CompressionType::UNCOMPRESSED,
-    );
-
-    let mut measurement_schema_map = HashMap::new();
-    measurement_schema_map.insert("s1", measurement_schema);
-    let measurement_group = MeasurementGroup {
-        measurement_schemas: measurement_schema_map,
-    };
-    let mut measurement_groups_map = HashMap::new();
-    let d1 = "d1";
-    measurement_groups_map.insert(d1, measurement_group);
-    let schema = Schema {
-        measurement_groups: measurement_groups_map,
-    };
-    let mut writer = TsFileWriter::new("target/data3.tsfile", schema, Default::default()).unwrap();
-
-    TsFileWriter::write(&mut writer, "d1", "s1", 1, IoTDBValue::INT(13));
-    TsFileWriter::write(&mut writer, "d1", "s1", 10, IoTDBValue::INT(14));
-    TsFileWriter::write(&mut writer, "d1", "s1", 100, IoTDBValue::INT(15));
-    TsFileWriter::write(&mut writer, "d1", "s1", 1000, IoTDBValue::INT(16));
-    TsFileWriter::write(&mut writer, "d1", "s1", 10000, IoTDBValue::INT(17));
 }
 
 #[cfg(test)]

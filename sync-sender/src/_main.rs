@@ -1,6 +1,7 @@
 // generated Rust module from Thrift IDL
 mod mlog;
 mod sync;
+mod sync_sender;
 
 use crate::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
 use pnet::datalink;

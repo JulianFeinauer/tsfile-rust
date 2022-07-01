@@ -10,10 +10,12 @@ pub struct MLog {
 }
 
 impl MLog {
+    #[allow(dead_code)]
     pub fn new() -> MLog {
         MLog { bytes: vec![] }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn flush(&mut self, writer: &mut dyn Write) -> Result<usize, std::io::Error> {
         let checksum = Self::calculate_checksum(&self.bytes);
         let length = self.bytes.len() as i32;
@@ -27,10 +29,12 @@ impl MLog {
         Ok(0)
     }
 
+    #[allow(dead_code)]
     fn calculate_checksum(bytes: &[u8]) -> i64 {
         crc32fast::hash(bytes) as i64
     }
 
+    #[allow(dead_code)]
     pub fn create_plan(
         &mut self,
         path: &str,
@@ -41,6 +45,7 @@ impl MLog {
         Self::write_create_plan(&mut self.bytes, path, data_type, encoding, compression)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn write_create_plan(
         writer: &mut dyn Write,
         path: &str,
@@ -106,10 +111,12 @@ impl MLog {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_storage_group_plan(&mut self, path: &str) -> Result<(), TsFileError> {
         Self::write_set_storage_group_plan(&mut self.bytes, path)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn write_set_storage_group_plan(
         writer: &mut dyn Write,
         path: &str,
