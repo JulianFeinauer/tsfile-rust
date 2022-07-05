@@ -1,12 +1,12 @@
 //! Different Encoding Algorithms for TsFiles
-use crate::{IoTDBValue, TSDataType, TsFileError};
+use crate::writer::{IoTDBValue, TSDataType, TsFileError};
 
 pub mod plain;
 pub mod time_encoder;
 
-use crate::encoding::plain::PlainEncoder;
-use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
-use crate::TSEncoding::{PLAIN, TS2DIFF};
+use crate::writer::encoding::plain::PlainEncoder;
+use crate::writer::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
+use crate::writer::TSEncoding::{PLAIN, TS2DIFF};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum TSEncoding {

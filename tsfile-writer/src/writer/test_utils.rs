@@ -1,6 +1,6 @@
-use crate::errors::TsFileError;
-use crate::tsfile_writer::TsFileWriter;
-use crate::{Schema, WriteWrapper};
+use crate::writer::errors::TsFileError;
+use crate::writer::tsfile_writer::TsFileWriter;
+use crate::writer::{Schema, WriteWrapper};
 use std::fs::File;
 use std::process::Command;
 

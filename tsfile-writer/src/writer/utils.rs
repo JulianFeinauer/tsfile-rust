@@ -1,4 +1,4 @@
-use crate::{PositionedWrite, TsFileError};
+use crate::writer::{PositionedWrite, TsFileError};
 use std::io::Read;
 
 pub fn write_var_u32(num: u32, buffer: &mut dyn PositionedWrite) -> Result<u8, TsFileError> {

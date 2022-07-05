@@ -1,8 +1,8 @@
-use crate::chunk_writer::ChunkWriter;
-use crate::errors::TsFileError;
-use crate::tsfile_io_writer::TsFileIoWriter;
-use crate::tsfile_writer::DataPoint;
-use crate::{IoTDBValue, PositionedWrite};
+use crate::writer::chunk_writer::ChunkWriter;
+use crate::writer::errors::TsFileError;
+use crate::writer::tsfile_io_writer::TsFileIoWriter;
+use crate::writer::tsfile_writer::DataPoint;
+use crate::writer::{IoTDBValue, PositionedWrite};
 use std::collections::BTreeMap;
 
 pub struct GroupWriter<'a> {

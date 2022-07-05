@@ -10,11 +10,11 @@ use thrift::transport::{
 };
 use thrift::Error;
 
-use tsfile_writer::errors::TsFileError;
-use tsfile_writer::Schema;
+use crate::writer::errors::TsFileError;
+use crate::writer::Schema;
 
-use crate::mlog::MLog;
-use crate::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
+use crate::sync::mlog::MLog;
+use crate::sync::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClient};
 
 // TODO what is this?
 const PARTITION_INTERVAL: i64 = 604800;

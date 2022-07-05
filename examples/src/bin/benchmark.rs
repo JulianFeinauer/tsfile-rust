@@ -1,9 +1,9 @@
 use simplelog::{LevelFilter, SimpleLogger};
 use std::time::SystemTime;
-use tsfile_writer::compression::CompressionType;
-use tsfile_writer::encoding::TSEncoding;
-use tsfile_writer::test_utils::write_ts_file;
-use tsfile_writer::{IoTDBValue, Schema, TSDataType};
+use tsfile_writer::writer::compression::CompressionType;
+use tsfile_writer::writer::encoding::TSEncoding;
+use tsfile_writer::writer::test_utils::write_ts_file;
+use tsfile_writer::writer::{IoTDBValue, Schema, TSDataType};
 
 fn main() {
     let _ = SimpleLogger::init(LevelFilter::Info, Default::default());

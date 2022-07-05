@@ -1,10 +1,10 @@
 //! Contains the TsFileWriter as central class to write tsfiles
-use crate::chunk_writer::ChunkWriter;
-use crate::errors::TsFileError;
-use crate::group_writer::GroupWriter;
-use crate::ts_file_config::TsFileConfig;
-use crate::tsfile_io_writer::TsFileIoWriter;
-use crate::{
+use crate::writer::chunk_writer::ChunkWriter;
+use crate::writer::errors::TsFileError;
+use crate::writer::group_writer::GroupWriter;
+use crate::writer::ts_file_config::TsFileConfig;
+use crate::writer::tsfile_io_writer::TsFileIoWriter;
+use crate::writer::{
     ChunkGroupMetadata, IoTDBValue, PositionedWrite, Schema, TimeSeriesMetadatable, WriteWrapper,
 };
 use std::borrow::Borrow;

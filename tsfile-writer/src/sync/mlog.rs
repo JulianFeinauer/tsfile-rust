@@ -1,9 +1,9 @@
 use std::io::Write;
 
-use tsfile_writer::compression::CompressionType;
-use tsfile_writer::encoding::TSEncoding;
-use tsfile_writer::errors::TsFileError;
-use tsfile_writer::TSDataType;
+use crate::writer::compression::CompressionType;
+use crate::writer::encoding::TSEncoding;
+use crate::writer::errors::TsFileError;
+use crate::writer::TSDataType;
 
 pub struct MLog {
     bytes: Vec<u8>,

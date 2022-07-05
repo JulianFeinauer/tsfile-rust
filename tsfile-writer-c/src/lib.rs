@@ -4,8 +4,8 @@ extern crate libc;
 use libc::c_char;
 use std::ffi::CStr;
 use std::fs::File;
-use tsfile_writer::tsfile_writer::TsFileWriter;
-use tsfile_writer::{IoTDBValue, Schema, WriteWrapper};
+use tsfile_writer::writer::tsfile_writer::TsFileWriter;
+use tsfile_writer::writer::{IoTDBValue, Schema, WriteWrapper};
 
 /// # Safety
 /// this function is intended for C usage, so unsafe is part of it....

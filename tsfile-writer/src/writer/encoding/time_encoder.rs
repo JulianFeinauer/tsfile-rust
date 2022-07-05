@@ -1,5 +1,5 @@
-use crate::encoding::Encoder;
-use crate::{IoTDBValue, TsFileError};
+use crate::writer::encoding::Encoder;
+use crate::writer::{IoTDBValue, TsFileError};
 use std::cmp::max;
 use std::io::Write;
 
