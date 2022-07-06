@@ -136,10 +136,10 @@ impl MLog {
 #[cfg(test)]
 mod test {
     use crate::sync::mlog::MLog;
-    use std::ops::Deref;
     use crate::writer::compression::CompressionType;
     use crate::writer::encoding::TSEncoding;
     use crate::writer::TSDataType;
+    use std::ops::Deref;
 
     #[test]
     fn test_write_mlog_set_sg() {

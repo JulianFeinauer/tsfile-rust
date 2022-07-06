@@ -868,8 +868,8 @@ mod tests {
     use crate::writer::tsfile_writer::TsFileWriter;
     use crate::writer::utils::{read_var_u32, write_var_u32};
     use crate::writer::{
-        IoTDBValue, MeasurementGroup, MeasurementSchema, Schema, TSDataType,
-        TsFileError, WriteWrapper,
+        IoTDBValue, MeasurementGroup, MeasurementSchema, Schema, TSDataType, TsFileError,
+        WriteWrapper,
     };
 
     #[test]
