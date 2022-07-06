@@ -9,6 +9,7 @@ use crate::writer::{IoTDBValue, Schema, TSDataType};
 use iotdb::client::remote::{Config, RpcSession};
 use iotdb::client::{DataSet, Session, Value};
 use std::fs::metadata;
+use std::thread::sleep;
 use std::time::Duration;
 use testcontainers::{
     core::WaitFor,
@@ -16,8 +17,7 @@ use testcontainers::{
     *,
 };
 
-#[test]
-fn integration_test() {
+fn execute_test(test_code: impl FnOnce(String), assertions: impl FnOnce((Vec<String>, Vec<Vec<i64>>))) {
     let docker = clients::Cli::default();
 
     let _container = docker.run(IoTDB::new());
@@ -28,24 +28,11 @@ fn integration_test() {
     println!("Exposed port: {}", port);
 
     let addr = format!("127.0.0.1:{}", port);
-    // Connect the sync server
-    let mut sender = SyncSender::new(addr.as_str(), None, None).unwrap();
 
-    // Now we could send over a file
-    let schema = Schema::simple(
-        "root.sg.d1",
-        "s1",
-        TSDataType::INT64,
-        TSEncoding::PLAIN,
-        CompressionType::UNCOMPRESSED,
-    );
+    test_code(addr);
 
-    let mut writer =
-        TsFileWriter::new("test.tsfile", schema.clone(), Default::default()).expect("");
-    writer.write("root.sg.d1", "s1", 1, IoTDBValue::LONG(13));
-    writer.close();
-
-    sender.sync("test.tsfile", "root.sg", schema);
+    // Wait some seconds
+    sleep(Duration::from_secs(5));
 
     // Check if the data is now present in iotdb
     let config = Config {
@@ -67,21 +54,23 @@ fn integration_test() {
     println!("Columns: {:?}", &result.get_column_names());
 
     let columns = (&result.get_column_names()).clone();
-    let mut results: Vec<i64> = Vec::new();
+    let mut results: Vec<Vec<i64>> = Vec::new();
 
     result.for_each(|r| {
         println!("Iterating Record");
+        let mut row: Vec<i64> = Vec::new();
         r.values.iter().for_each(|v| {
             match v {
                 Value::Int64(v) => {
-                    results.push(*v);
+                    row.push(*v);
                     println!("Found value {}", *v)
                 }
                 _ => {
                     // nothing
                 }
             }
-        })
+        });
+        results.push(row);
     });
 
     session.close();
@@ -89,7 +78,74 @@ fn integration_test() {
     println!("Stopping...");
     _container.stop();
 
-    // Assertions (I have no idea why the column at the end occurs twice)
-    assert_eq!(vec!["Time", "root.sg.d1.s1", "root.sg.d1.s1"], columns);
-    assert_eq!(vec![1_i64, 13_i64, 13_i64], results);
+    assertions((columns, results));
+}
+
+
+#[test]
+fn sync_once() {
+    execute_test(|addr| {
+        // Connect the sync server
+        let mut sender = SyncSender::new(addr.as_str(), None, None).unwrap();
+
+        // Now we could send over a file
+        let schema = Schema::simple(
+            "root.sg.d1",
+            "s1",
+            TSDataType::INT64,
+            TSEncoding::PLAIN,
+            CompressionType::UNCOMPRESSED,
+        );
+
+        let mut writer =
+            TsFileWriter::new("test.tsfile", schema.clone(), Default::default()).expect("");
+        writer.write("root.sg.d1", "s1", 1, IoTDBValue::LONG(13));
+        writer.close();
+
+        sender.sync("test.tsfile", "root.sg", Some(schema));
+    }, |(columns, results)| {
+        // Assertions (I have no idea why the column at the end occurs twice)
+        assert_eq!(vec!["Time", "root.sg.d1.s1", "root.sg.d1.s1"], columns);
+        assert_eq!(vec![vec![1_i64, 13_i64, 13_i64]], results);
+    })
+}
+
+#[test]
+fn sync_twice() {
+    execute_test(|addr| {
+        // Connect the sync server
+        let mut sender = SyncSender::new(addr.as_str(), None, None).unwrap();
+
+        // Now we could send over a file
+        let schema = Schema::simple(
+            "root.sg.d1",
+            "s1",
+            TSDataType::INT64,
+            TSEncoding::PLAIN,
+            CompressionType::UNCOMPRESSED,
+        );
+
+        // First run
+        let mut writer =
+            TsFileWriter::new("test.tsfile", schema.clone(), Default::default()).expect("");
+        writer.write("root.sg.d1", "s1", 1, IoTDBValue::LONG(13));
+        writer.close();
+        sender.sync("test.tsfile", "root.sg", Some(schema.clone()));
+
+        // Second run
+        let mut sender = SyncSender::new(addr.as_str(), None, None).unwrap();
+        let mut writer =
+            TsFileWriter::new("test2.tsfile", schema.clone(), Default::default()).expect("");
+        writer.write("root.sg.d1", "s1", 2, IoTDBValue::LONG(14));
+        writer.close();
+        // Do not try to recreate the schema now!
+        sender.sync("test2.tsfile", "root.sg", None);
+    }, |(columns, results)| {
+        // Assertions (I have no idea why the column at the end occurs twice)
+        assert_eq!(vec!["Time", "root.sg.d1.s1", "root.sg.d1.s1"], columns);
+        assert_eq!(vec![
+            vec![1_i64, 13_i64, 13_i64],
+            vec![2_i64, 14_i64, 14_i64]
+        ], results);
+    })
 }

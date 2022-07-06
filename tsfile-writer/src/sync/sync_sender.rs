@@ -1,4 +1,5 @@
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use pnet::datalink;
 use sha2::Digest;
@@ -19,15 +20,13 @@ use crate::sync::sync::{ConfirmInfo, SyncServiceSyncClient, TSyncServiceSyncClie
 // TODO what is this?
 const PARTITION_INTERVAL: i64 = 604800;
 
-pub struct SyncSender<IP, OP>
-where
-    IP: TInputProtocol,
-    OP: TOutputProtocol,
+pub struct SyncSender
 {
     local_addr: String,
     uuid: String,
     version: String,
-    client: SyncServiceSyncClient<IP, OP>,
+    client: SyncServiceSyncClient<TBinaryInputProtocol<TFramedReadTransport<ReadHalf<TTcpChannel>>>,
+        TBinaryOutputProtocol<TFramedWriteTransport<WriteHalf<TTcpChannel>>>>,
 }
 
 #[derive(Debug)]
@@ -45,10 +44,7 @@ impl From<thrift::Error> for SyncSenderError {
 }
 
 impl
-    SyncSender<
-        TBinaryInputProtocol<TFramedReadTransport<ReadHalf<TTcpChannel>>>,
-        TBinaryOutputProtocol<TFramedWriteTransport<WriteHalf<TTcpChannel>>>,
-    >
+    SyncSender
 {
     #[allow(clippy::type_complexity)]
     pub fn new(
@@ -56,10 +52,7 @@ impl
         local_addr: Option<&str>,
         uuid: Option<&str>,
     ) -> Result<
-        SyncSender<
-            TBinaryInputProtocol<TFramedReadTransport<ReadHalf<TTcpChannel>>>,
-            TBinaryOutputProtocol<TFramedWriteTransport<WriteHalf<TTcpChannel>>>,
-        >,
+        SyncSender,
         SyncSenderError,
     > {
         let local_addr = match local_addr {
@@ -128,7 +121,7 @@ impl
         &mut self,
         filename: &str,
         storage_group: &str,
-        schema: Schema,
+        schema: Option<Schema>,
     ) -> Result<(), SyncSenderError> {
         self.client.start_sync().expect("");
         self.client.init(std::string::String::from(storage_group))?;
@@ -158,8 +151,13 @@ impl
             }
         }
 
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
         self.client
-            .init_sync_data(format!("0_0_{}", filename).to_string())
+            .init_sync_data(format!("0_0_{}-1-0-0.tsfile", time).to_string())
             .expect("");
         let bytes = fs::read(filename).expect("");
         self.client.sync_data(bytes.clone()).expect("");
@@ -190,24 +188,27 @@ impl
     }
 
     #[allow(dead_code)]
-    fn write_mlog(storage_group: &str, schema: Schema) -> Result<Vec<u8>, TsFileError> {
+    fn write_mlog(storage_group: &str, schema: Option<Schema>) -> Result<Vec<u8>, TsFileError> {
         // Create the mlog
         let mut m_log = MLog::new();
         let mut mlog_buffer: Vec<u8> = vec![];
 
-        m_log.set_storage_group_plan(storage_group)?;
-        m_log.flush(&mut mlog_buffer)?;
+        // We can only do that if its the first sync (ever?!)
+        if let Some(schema) = schema {
+            m_log.set_storage_group_plan(storage_group)?;
+            m_log.flush(&mut mlog_buffer)?;
 
-        // Create a plan for each timeseries in Schema
-        for (device_id, series) in schema.get_devices() {
-            for (measurement_id, timeseries) in series.get_timeseries() {
-                let path = format!("{}.{}", device_id, measurement_id);
-                m_log.create_plan(
-                    path.as_str(),
-                    timeseries.data_type,
-                    timeseries.encoding,
-                    timeseries.compression,
-                )?;
+            // Create a plan for each timeseries in Schema
+            for (device_id, series) in schema.get_devices() {
+                for (measurement_id, timeseries) in series.get_timeseries() {
+                    let path = format!("{}.{}", device_id, measurement_id);
+                    m_log.create_plan(
+                        path.as_str(),
+                        timeseries.data_type,
+                        timeseries.encoding,
+                        timeseries.compression,
+                    )?;
+                }
             }
         }
         m_log.flush(&mut mlog_buffer)?;
