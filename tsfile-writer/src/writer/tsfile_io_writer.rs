@@ -1,6 +1,6 @@
-use crate::chunk_writer::ChunkHeader;
-use crate::errors::TsFileError;
-use crate::{
+use crate::writer::chunk_writer::ChunkHeader;
+use crate::writer::errors::TsFileError;
+use crate::writer::{
     BloomFilter, ChunkGroupHeader, ChunkGroupMetadata, ChunkMetadata, CompressionType,
     MetadataIndexNode, Path, PositionedWrite, Serializable, Statistics, TSDataType, TSEncoding,
     TimeSeriesMetadata, TimeSeriesMetadatable, TsFileConfig, TsFileMetadata,

@@ -1,9 +1,9 @@
-use crate::encoding::time_encoder::LongTs2DiffEncoder;
-use crate::encoding::Encoder;
-use crate::statistics::Statistics;
-use crate::tsfile_io_writer::TsFileIoWriter;
-use crate::utils::{size_var_i32, size_var_u32};
-use crate::{
+use crate::writer::encoding::time_encoder::LongTs2DiffEncoder;
+use crate::writer::encoding::Encoder;
+use crate::writer::statistics::Statistics;
+use crate::writer::tsfile_io_writer::TsFileIoWriter;
+use crate::writer::utils::{size_var_i32, size_var_u32};
+use crate::writer::{
     utils, write_str, CompressionType, IoTDBValue, PositionedWrite, Serializable, TSDataType,
     TSEncoding, TsFileError, CHUNK_HEADER, ONLY_ONE_PAGE_CHUNK_HEADER,
 };
@@ -70,7 +70,7 @@ impl PageWriter {
         self.buffer.clear();
         let mut time_buffer = vec![];
         self.time_encoder.serialize(&mut time_buffer);
-        crate::write_var_u32(time_buffer.len() as u32, &mut self.buffer);
+        crate::writer::write_var_u32(time_buffer.len() as u32, &mut self.buffer);
         self.buffer.write_all(time_buffer.as_slice());
         self.value_encoder.serialize(&mut self.buffer);
     }

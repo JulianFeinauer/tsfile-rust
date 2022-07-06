@@ -1,9 +1,9 @@
 use std::io::Write;
 
-use tsfile_writer::compression::CompressionType;
-use tsfile_writer::encoding::TSEncoding;
-use tsfile_writer::errors::TsFileError;
-use tsfile_writer::TSDataType;
+use crate::writer::compression::CompressionType;
+use crate::writer::encoding::TSEncoding;
+use crate::writer::errors::TsFileError;
+use crate::writer::TSDataType;
 
 pub struct MLog {
     bytes: Vec<u8>,
@@ -135,11 +135,11 @@ impl MLog {
 
 #[cfg(test)]
 mod test {
-    use crate::MLog;
+    use crate::sync::mlog::MLog;
+    use crate::writer::compression::CompressionType;
+    use crate::writer::encoding::TSEncoding;
+    use crate::writer::TSDataType;
     use std::ops::Deref;
-    use tsfile_writer::compression::CompressionType;
-    use tsfile_writer::encoding::TSEncoding;
-    use tsfile_writer::TSDataType;
 
     #[test]
     fn test_write_mlog_set_sg() {

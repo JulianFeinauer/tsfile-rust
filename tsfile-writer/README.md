@@ -95,11 +95,19 @@ writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 * [x] SNAPPY
 * [ ] everything else...
 
+## Feature 'sync_sender'
+
+This is a very simple implementation of a "Sync-Client" for the Apache IoTDB Server.
+This means, this tool behaves like an IoTDB Server with `start-sync-client.sh` running.
+I.e. it will send tsfiles to the respective reveiving server using Apache IoTDBs Sync Protocol.
+
+
 ## Changelog
 
 ### 0.1.4 (not released)
 
 - TsFileWriter::write_many now accepts `IntoIterator<Item=DataPoint<'a>>` as argument instead of only `Vec<DataPoint<'a>>`
+- Added SyncSender (feature `sync_sender`)
 
 ### 0.1.3
 

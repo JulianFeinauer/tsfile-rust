@@ -1,5 +1,5 @@
-use crate::encoding::Encoder;
-use crate::{IoTDBValue, TsFileError};
+use crate::writer::encoding::Encoder;
+use crate::writer::{IoTDBValue, TsFileError};
 use std::cmp::max;
 use std::io::Write;
 
@@ -256,7 +256,7 @@ impl IntTs2DiffEncoder {
 
 #[cfg(test)]
 mod tests {
-    use crate::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
+    use crate::writer::encoding::time_encoder::{IntTs2DiffEncoder, LongTs2DiffEncoder};
 
     #[test]
     fn test_long_to_bytes() {

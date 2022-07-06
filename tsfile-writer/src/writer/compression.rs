@@ -1,5 +1,5 @@
 //! Contains the compression algorithms
-use crate::CompressionType::{SNAPPY, UNCOMPRESSED};
+use crate::writer::CompressionType::{SNAPPY, UNCOMPRESSED};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum CompressionType {

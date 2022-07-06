@@ -1,8 +1,8 @@
 use std::io::Write;
 
-use crate::encoding::Encoder;
-use crate::{utils, IoTDBValue};
-use crate::{TSDataType, TsFileError};
+use crate::writer::encoding::Encoder;
+use crate::writer::{utils, IoTDBValue};
+use crate::writer::{TSDataType, TsFileError};
 
 pub struct PlainEncoder {
     data_type: TSDataType,
