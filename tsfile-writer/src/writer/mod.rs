@@ -14,6 +14,15 @@
 //! To write a TsFile just do something like
 //!
 //! ```
+//! use tsfile_writer::writer::tsfile_writer::TsFileWriter;
+//! use tsfile_writer::writer::IoTDBValue;
+//! use tsfile_writer::writer::tsfile_writer::DataPoint;
+//! use tsfile_writer::writer::schema::TsFileSchemaBuilder;
+//! use tsfile_writer::writer::schema::DeviceBuilder;
+//! use tsfile_writer::writer::TSDataType;
+//! use tsfile_writer::writer::encoding::TSEncoding;
+//! use tsfile_writer::writer::compression::CompressionType;
+//!
 //! // Create the Schema
 //! // Two devices with two sensors each
 //! let schema = TsFileSchemaBuilder::new()
@@ -63,13 +72,13 @@
 //!
 //! // Write multiple timeseries at once
 //! writer.write_many("d1",1, vec![
-//!         DataPoint::new("s1", IoTDBValue::LONG(i)),
-//!         DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+//!         DataPoint::new("s1", IoTDBValue::LONG(13)),
+//!         DataPoint::new("s2", IoTDBValue::FLOAT(13.0 as f32)),
 //! ]);
 //!
 //! // Write single series
-//! writer.write("d2", "s1", 1, IoTDBValue::LONG(i));
-//! writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
+//! writer.write("d2", "s1", 1, IoTDBValue::LONG(14));
+//! writer.write("d2", "s2", 1, IoTDBValue::FLOAT(14.0 as f32));
 //! ```
 #![allow(unused_must_use)]
 extern crate core;
@@ -853,13 +862,13 @@ mod tests {
     use std::collections::HashMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::compression::CompressionType;
-    use crate::encoding::TSEncoding;
-    use crate::schema::{DeviceBuilder, TsFileSchemaBuilder};
-    use crate::tsfile_writer::TsFileWriter;
-    use crate::utils::{read_var_u32, write_var_u32};
-    use crate::{
-        write_file_3, IoTDBValue, MeasurementGroup, MeasurementSchema, Schema, TSDataType,
+    use crate::writer::compression::CompressionType;
+    use crate::writer::encoding::TSEncoding;
+    use crate::writer::schema::{DeviceBuilder, TsFileSchemaBuilder};
+    use crate::writer::tsfile_writer::TsFileWriter;
+    use crate::writer::utils::{read_var_u32, write_var_u32};
+    use crate::writer::{
+        IoTDBValue, MeasurementGroup, MeasurementSchema, Schema, TSDataType,
         TsFileError, WriteWrapper,
     };
 
@@ -867,11 +876,6 @@ mod tests {
     fn it_works() {
         let result = 2 + 2;
         assert_eq!(result, 4);
-    }
-
-    #[test]
-    fn write_file_test_3() {
-        write_file_3()
     }
 
     #[test]

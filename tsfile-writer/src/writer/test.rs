@@ -62,8 +62,8 @@
 mod test {
     use std::env::current_dir;
 
-    use crate::test_utils::{validate_output, write_ts_file};
-    use crate::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
+    use crate::writer::test_utils::{validate_output, write_ts_file};
+    use crate::writer::{CompressionType, IoTDBValue, Schema, TSDataType, TSEncoding};
 
     // Can not run currently, as it needs the ts file analyzer tool
     #[test]

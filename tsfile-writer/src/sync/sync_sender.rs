@@ -242,7 +242,7 @@ impl
 
 #[cfg(test)]
 mod tests {
-    use crate::sync_sender::SyncSender;
+    use crate::sync::sync_sender::SyncSender;
 
     #[test]
     #[ignore]

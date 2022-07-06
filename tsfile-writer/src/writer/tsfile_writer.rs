@@ -36,6 +36,17 @@ impl<'a> DataPoint<'a> {
 ///
 /// # Example Usage
 /// ```
+/// use tsfile_writer::writer::tsfile_writer::TsFileWriter;
+/// use tsfile_writer::writer::IoTDBValue;
+/// use tsfile_writer::writer::tsfile_writer::DataPoint;
+/// use tsfile_writer::writer::schema::TsFileSchemaBuilder;
+/// use tsfile_writer::writer::schema::DeviceBuilder;
+/// use tsfile_writer::writer::TSDataType;
+/// use tsfile_writer::writer::encoding::TSEncoding;
+/// use tsfile_writer::writer::compression::CompressionType;
+///
+/// // Create the Schema
+/// // Two devices with two sensors each
 /// let schema = TsFileSchemaBuilder::new()
 ///         .add(
 ///             "d1",
@@ -83,9 +94,13 @@ impl<'a> DataPoint<'a> {
 ///
 /// // Write multiple timeseries at once
 /// writer.write_many("d1",1, vec![
-///         DataPoint::new("s1", IoTDBValue::LONG(i)),
-///         DataPoint::new("s2", IoTDBValue::FLOAT(i as f32)),
+///         DataPoint::new("s1", IoTDBValue::LONG(13)),
+///         DataPoint::new("s2", IoTDBValue::FLOAT(13.0 as f32)),
 /// ]);
+///
+/// // Write single series
+/// writer.write("d2", "s1", 1, IoTDBValue::LONG(14));
+/// writer.write("d2", "s2", 1, IoTDBValue::FLOAT(14.0 as f32));
 /// ```
 pub struct TsFileWriter<'a, T: PositionedWrite> {
     #[allow(dead_code)]
