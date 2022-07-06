@@ -124,7 +124,7 @@ impl
     }
 
     #[allow(dead_code)]
-    fn sync(
+    pub(crate) fn sync(
         &mut self,
         filename: &str,
         storage_group: &str,
@@ -158,9 +158,9 @@ impl
             }
         }
 
-        let filename = format!("0_0_{}", filename); // 1654074550252-1-0-0.tsfile";
-
-        self.client.init_sync_data(filename.to_string()).expect("");
+        self.client
+            .init_sync_data(format!("0_0_{}", filename).to_string())
+            .expect("");
         let bytes = fs::read(filename).expect("");
         self.client.sync_data(bytes.clone()).expect("");
         let digest = Self::calculate_digest(&bytes);
@@ -201,7 +201,7 @@ impl
         // Create a plan for each timeseries in Schema
         for (device_id, series) in schema.get_devices() {
             for (measurement_id, timeseries) in series.get_timeseries() {
-                let path = format!("{}.{}.{}", storage_group, device_id, measurement_id);
+                let path = format!("{}.{}", device_id, measurement_id);
                 m_log.create_plan(
                     path.as_str(),
                     timeseries.data_type,
