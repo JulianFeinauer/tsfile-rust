@@ -71,6 +71,6 @@
 //! writer.write("d2", "s1", 1, IoTDBValue::LONG(i));
 //! writer.write("d2", "s2", 1, IoTDBValue::FLOAT(i as f32));
 //! ```
-pub mod writer;
 #[cfg(feature = "sync_sender")]
 pub mod sync;
+pub mod writer;

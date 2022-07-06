@@ -1,6 +1,8 @@
 //! Contains the classes for defining the Schema of a TsFile, i.e. which Devices / Snesors
 //! it contains and their datatype / encoding / compression
-use crate::writer::{CompressionType, MeasurementGroup, MeasurementSchema, Schema, TSDataType, TSEncoding};
+use crate::writer::{
+    CompressionType, MeasurementGroup, MeasurementSchema, Schema, TSDataType, TSEncoding,
+};
 use std::collections::HashMap;
 
 pub struct TsFileSchemaBuilder<'a> {
