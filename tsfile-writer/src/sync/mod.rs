@@ -8,3 +8,6 @@ mod mlog;
 #[allow(clippy::module_inception)] // is not exported
 mod sync;
 pub mod sync_sender;
+mod test;
+#[cfg(test)]
+mod container_iotdb;
