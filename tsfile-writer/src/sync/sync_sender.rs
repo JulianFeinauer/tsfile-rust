@@ -158,7 +158,9 @@ impl
             }
         }
 
-        self.client.init_sync_data(format!("0_0_{}", filename).to_string()).expect("");
+        self.client
+            .init_sync_data(format!("0_0_{}", filename).to_string())
+            .expect("");
         let bytes = fs::read(filename).expect("");
         self.client.sync_data(bytes.clone()).expect("");
         let digest = Self::calculate_digest(&bytes);

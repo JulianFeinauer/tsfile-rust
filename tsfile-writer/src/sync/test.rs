@@ -1,20 +1,20 @@
-use std::fs::metadata;
-use std::time::Duration;
+use crate::sync::container_iotdb;
+use crate::sync::container_iotdb::IoTDB;
+use crate::sync::sync_sender::SyncSender;
+use crate::writer::compression::CompressionType;
+use crate::writer::encoding::TSEncoding;
+use crate::writer::schema::TsFileSchemaBuilder;
+use crate::writer::tsfile_writer::TsFileWriter;
+use crate::writer::{IoTDBValue, Schema, TSDataType};
 use iotdb::client::remote::{Config, RpcSession};
 use iotdb::client::{DataSet, Session, Value};
+use std::fs::metadata;
+use std::time::Duration;
 use testcontainers::{
     core::WaitFor,
     images::{generic::GenericImage, hello_world::HelloWorld},
     *,
 };
-use crate::sync::container_iotdb;
-use crate::sync::container_iotdb::IoTDB;
-use crate::sync::sync_sender::SyncSender;
-use crate::writer::{IoTDBValue, Schema, TSDataType};
-use crate::writer::compression::CompressionType;
-use crate::writer::encoding::TSEncoding;
-use crate::writer::schema::TsFileSchemaBuilder;
-use crate::writer::tsfile_writer::TsFileWriter;
 
 #[test]
 fn integration_test() {
@@ -32,9 +32,16 @@ fn integration_test() {
     let mut sender = SyncSender::new(addr.as_str(), None, None).unwrap();
 
     // Now we could send over a file
-    let schema = Schema::simple("root.sg.d1", "s1", TSDataType::INT64, TSEncoding::PLAIN, CompressionType::UNCOMPRESSED);
+    let schema = Schema::simple(
+        "root.sg.d1",
+        "s1",
+        TSDataType::INT64,
+        TSEncoding::PLAIN,
+        CompressionType::UNCOMPRESSED,
+    );
 
-    let mut writer = TsFileWriter::new("test.tsfile", schema.clone(), Default::default()).expect("");
+    let mut writer =
+        TsFileWriter::new("test.tsfile", schema.clone(), Default::default()).expect("");
     writer.write("root.sg.d1", "s1", 1, IoTDBValue::LONG(13));
     writer.close();
 
@@ -53,7 +60,9 @@ fn integration_test() {
     // session.set_storage_group("root.sg");
 
     println!("Execute Query");
-    let result: Box<dyn DataSet> = session.execute_query_statement("SELECT * FROM root.**", None).expect("");
+    let result: Box<dyn DataSet> = session
+        .execute_query_statement("SELECT * FROM root.**", None)
+        .expect("");
 
     println!("Columns: {:?}", &result.get_column_names());
 

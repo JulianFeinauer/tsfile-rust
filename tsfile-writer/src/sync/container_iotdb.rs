@@ -11,7 +11,7 @@ const TAG: &str = "0.13.0-node";
 #[derive(Default, Debug)]
 pub struct IoTDB {
     val_key: String,
-    val_val: String
+    val_val: String,
 }
 
 const VOL_KEY: &str = "";
@@ -19,12 +19,14 @@ const VOL_VAL: &str = "";
 
 impl IoTDB {
     pub(crate) fn new() -> IoTDB {
-        let dir = current_dir().expect("").join("src/sync/iotdb-engine.properties");
+        let dir = current_dir()
+            .expect("")
+            .join("src/sync/iotdb-engine.properties");
 
         println!("Directory: {}", dir.as_path().to_str().expect(""));
         IoTDB {
             val_key: dir.as_path().to_str().expect("").to_string(),
-            val_val: "/iotdb/conf/iotdb-engine.properties".to_string()
+            val_val: "/iotdb/conf/iotdb-engine.properties".to_string(),
         }
     }
 }
@@ -44,7 +46,7 @@ impl Image for IoTDB {
         vec![WaitFor::message_on_stdout("IoTDB has started.")]
     }
 
-    fn volumes(&self) -> Box<dyn Iterator<Item=(&String, &String)> + '_> {
+    fn volumes(&self) -> Box<dyn Iterator<Item = (&String, &String)> + '_> {
         Box::new(vec![(&self.val_key, &self.val_val)].into_iter())
     }
 }
