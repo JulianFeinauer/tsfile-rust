@@ -104,7 +104,7 @@ I.e. it will send tsfiles to the respective reveiving server using Apache IoTDBs
 
 ## Changelog
 
-### 0.1.4 (not released)
+### 0.2.0
 
 - TsFileWriter::write_many now accepts `IntoIterator<Item=DataPoint<'a>>` as argument instead of only `Vec<DataPoint<'a>>`
 - Added SyncSender (feature `sync_sender`)
